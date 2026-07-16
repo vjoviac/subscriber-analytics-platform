@@ -102,3 +102,14 @@ def generate_event() -> dict:
         "application": application,
         "session": generate_session(application=application, network=network),
     }
+
+def generate_events(total_events: int) -> list[dict]:
+    if total_events <= 0:
+        raise ValueError(
+            "total_events must be greater than zero"
+        )
+
+    return [
+        generate_event()
+        for _ in range(total_events)
+    ]
