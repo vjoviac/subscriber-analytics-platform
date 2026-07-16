@@ -1,6 +1,7 @@
 from faker import Faker
 import random
 from datetime import datetime, UTC
+from generators.catalogs import DEVICE_CATALOG, PLANS
 
 fake = Faker()
 
@@ -23,6 +24,11 @@ def generate_imsi() -> str:
 
     return f"{mcc}{mnc}{subscriber_id}"
 
+def generate_device() -> dict[str, str]:
+    device = random.choice(DEVICE_CATALOG)
+
+    return device.copy()
+
 def generate_event() -> dict:
 
     return {
@@ -32,8 +38,7 @@ def generate_event() -> dict:
         "subscriber": {
             "imsi": generate_imsi(),
             "msisdn": generate_msisdn(),
-            "plan": random.choice(
-                ["Unlimited", "Premium", "Standard", "Prepaid"]
-            ),
+            "plan": random.choice(PLANS),
         },
+        "device": generate_device(),
     }
