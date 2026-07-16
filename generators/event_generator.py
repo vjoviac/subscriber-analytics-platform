@@ -3,8 +3,10 @@ import random
 from datetime import datetime, UTC
 from generators.catalogs import (
     APPLICATION_CATALOG,
+    APPLICATION_TRAFFIC_PROFILES,
     DEVICE_CATALOG,
     NETWORK_CELLS,
+    NETWORK_QUALITY_PROFILES,
     PLANS,
 )
 
@@ -44,7 +46,47 @@ def generate_application() -> dict[str, str]:
 
     return application.copy()
 
+def generate_session(
+    application: dict[str, str],
+    network: dict[str, str],
+) -> dict[str, int | float]:
+
+    application_id = application["application_id"]
+    technology = network["technology"]
+
+    traffic_profile = APPLICATION_TRAFFIC_PROFILES[application_id]
+    quality_profile = NETWORK_QUALITY_PROFILES[technology]
+
+    bytes_dl = random.randint(
+        *traffic_profile["bytes_dl_range"]
+    )
+
+    bytes_ul = random.randint(
+        *traffic_profile["bytes_ul_range"]
+    )
+
+    latency_ms = random.randint(
+        *quality_profile["latency_ms_range"]
+    )
+
+    packet_loss_pct = round(
+        random.uniform(
+            *quality_profile["packet_loss_pct_range"]
+        ),
+        2,
+    )
+
+    return {
+        "bytes_dl": bytes_dl,
+        "bytes_ul": bytes_ul,
+        "total_bytes": bytes_dl + bytes_ul,
+        "latency_ms": latency_ms,
+        "packet_loss_pct": packet_loss_pct,
+    }
+
 def generate_event() -> dict:
+    application = generate_application()
+    network = generate_network()
 
     return {
         "event_id": fake.uuid4(),
@@ -56,6 +98,7 @@ def generate_event() -> dict:
             "plan": random.choice(PLANS),
         },
         "device": generate_device(),
-        "network": generate_network(),
-        "application": generate_application(),
+        "network": network,
+        "application": application,
+        "session": generate_session(application=application, network=network),
     }

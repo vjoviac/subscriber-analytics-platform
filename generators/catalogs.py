@@ -43,6 +43,37 @@ APPLICATION_CATALOG = [
     },
 ]
 
+APPLICATION_TRAFFIC_PROFILES = {
+    "app-001": {
+        "bytes_dl_range": (5_000_000, 50_000_000),
+        "bytes_ul_range": (100_000, 2_000_000),
+    },
+    "app-002": {
+        "bytes_dl_range": (10_000_000, 80_000_000),
+        "bytes_ul_range": (100_000, 1_500_000),
+    },
+    "app-003": {
+        "bytes_dl_range": (3_000_000, 30_000_000),
+        "bytes_ul_range": (200_000, 3_000_000),
+    },
+    "app-004": {
+        "bytes_dl_range": (50_000, 2_000_000),
+        "bytes_ul_range": (50_000, 1_500_000),
+    },
+    "app-005": {
+        "bytes_dl_range": (1_000_000, 20_000_000),
+        "bytes_ul_range": (200_000, 4_000_000),
+    },
+    "app-006": {
+        "bytes_dl_range": (500_000, 8_000_000),
+        "bytes_ul_range": (50_000, 500_000),
+    },
+    "app-007": {
+        "bytes_dl_range": (1_000_000, 15_000_000),
+        "bytes_ul_range": (1_000_000, 12_000_000),
+    },
+}
+
 RAT_TYPES = [
     "4G",
     "5G",
@@ -134,3 +165,18 @@ NETWORK_CELLS = [
         "technology": "4G",
     },
 ]
+
+NETWORK_QUALITY_PROFILES = {
+    "4G": {
+        "latency_ms_range": (30, 100),
+        "packet_loss_pct_range": (0.1, 2.0),
+    },
+    "5G": {
+        "latency_ms_range": (10, 50),
+        "packet_loss_pct_range": (0.0, 1.0),
+    },
+    "WiFi": {
+        "latency_ms_range": (15, 80),
+        "packet_loss_pct_range": (0.0, 2.5),
+    },
+}
