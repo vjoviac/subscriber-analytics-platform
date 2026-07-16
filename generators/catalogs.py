@@ -5,14 +5,42 @@ PLANS = [
     "Prepaid"
 ]
 
-APPLICATIONS = [
-    "YouTube",
-    "Netflix",
-    "TikTok",
-    "WhatsApp",
-    "Instagram",
-    "Spotify",
-    "Zoom"
+APPLICATION_CATALOG = [
+    {
+        "application_id": "app-001",
+        "name": "YouTube",
+        "category": "Video Streaming",
+    },
+    {
+        "application_id": "app-002",
+        "name": "Netflix",
+        "category": "Video Streaming",
+    },
+    {
+        "application_id": "app-003",
+        "name": "TikTok",
+        "category": "Social Media",
+    },
+    {
+        "application_id": "app-004",
+        "name": "WhatsApp",
+        "category": "Messaging",
+    },
+    {
+        "application_id": "app-005",
+        "name": "Instagram",
+        "category": "Social Media",
+    },
+    {
+        "application_id": "app-006",
+        "name": "Spotify",
+        "category": "Audio Streaming",
+    },
+    {
+        "application_id": "app-007",
+        "name": "Zoom",
+        "category": "Real-Time Communication",
+    },
 ]
 
 RAT_TYPES = [

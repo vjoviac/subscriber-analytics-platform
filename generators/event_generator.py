@@ -1,7 +1,12 @@
 from faker import Faker
 import random
 from datetime import datetime, UTC
-from generators.catalogs import DEVICE_CATALOG, PLANS, NETWORK_CELLS
+from generators.catalogs import (
+    APPLICATION_CATALOG,
+    DEVICE_CATALOG,
+    NETWORK_CELLS,
+    PLANS,
+)
 
 fake = Faker()
 
@@ -34,6 +39,11 @@ def generate_network() -> dict[str, str]:
 
     return network.copy()
 
+def generate_application() -> dict[str, str]:
+    application = random.choice(APPLICATION_CATALOG)
+
+    return application.copy()
+
 def generate_event() -> dict:
 
     return {
@@ -47,4 +57,5 @@ def generate_event() -> dict:
         },
         "device": generate_device(),
         "network": generate_network(),
+        "application": generate_application(),
     }
