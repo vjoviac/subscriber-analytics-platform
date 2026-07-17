@@ -4,10 +4,11 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 
-AWS_PROFILE = "subscriber-analytics"
-AWS_REGION = "us-east-2"
-S3_BUCKET = "subscriber-analytics-platform-dev"
-
+from infrastructure.aws_config import (
+    AWS_PROFILE,
+    AWS_REGION,
+    S3_BUCKET,
+)
 
 def build_s3_key(local_file: Path) -> str:
     """

@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 
 # Virtual environment
 .venv/
@@ -20,3 +21,10 @@ data/
 
 # Secrets
 .env
+
+# Python packaging
+*.egg-info/
+
+# Coverage reports
+.coverage
+htmlcov/
