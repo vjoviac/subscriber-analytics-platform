@@ -1,0 +1,58 @@
+DEVICES = [
+    {
+        "tac": "35693803",
+        "device_vendor": "Samsung",
+        "device_model": "Galaxy S24",
+        "device_os": "Android",
+        "max_supported_technology": "5G",
+    },
+    {
+        "tac": "35123456",
+        "device_vendor": "Samsung",
+        "device_model": "Galaxy A55",
+        "device_os": "Android",
+        "max_supported_technology": "5G",
+    },
+    {
+        "tac": "35209900",
+        "device_vendor": "Apple",
+        "device_model": "iPhone 15",
+        "device_os": "iOS",
+        "max_supported_technology": "5G",
+    },
+    {
+        "tac": "35733109",
+        "device_vendor": "Apple",
+        "device_model": "iPhone 14",
+        "device_os": "iOS",
+        "max_supported_technology": "5G",
+    },
+    {
+        "tac": "86423006",
+        "device_vendor": "Xiaomi",
+        "device_model": "Redmi Note 13",
+        "device_os": "Android",
+        "max_supported_technology": "5G",
+    },
+    {
+        "tac": "35111111",
+        "device_vendor": "Samsung",
+        "device_model": "Galaxy A30",
+        "device_os": "Android",
+        "max_supported_technology": "4G",
+    },
+    {
+        "tac": "35222222",
+        "device_vendor": "Apple",
+        "device_model": "iPhone 11",
+        "device_os": "iOS",
+        "max_supported_technology": "4G",
+    },
+    {
+        "tac": "86411111",
+        "device_vendor": "Xiaomi",
+        "device_model": "Redmi Note 8",
+        "device_os": "Android",
+        "max_supported_technology": "4G",
+    },
+]

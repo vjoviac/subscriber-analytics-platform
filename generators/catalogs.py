@@ -175,8 +175,4 @@ NETWORK_QUALITY_PROFILES = {
         "latency_ms_range": (10, 50),
         "packet_loss_pct_range": (0.0, 1.0),
     },
-    "WiFi": {
-        "latency_ms_range": (15, 80),
-        "packet_loss_pct_range": (0.0, 2.5),
-    },
 }
