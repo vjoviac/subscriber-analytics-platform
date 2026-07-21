@@ -11,6 +11,11 @@ from infrastructure.aws_config import DEFAULT_EVENT_COUNT
 
 from infrastructure.logging_config import configure_logging
 
+#Temporary import for testing
+from generators.event_generator import generate_event
+from enrichment.event_enricher import enrich_event
+import json
+
 logger = logging.getLogger(__name__)
 
 def parse_arguments() -> argparse.Namespace:
@@ -55,6 +60,7 @@ def main() -> None:
         args = parse_arguments()
         
         events = generate_events(args.events)
+
         output_file = build_output_file()
 
         save_events_to_jsonl(
