@@ -3,28 +3,43 @@ from pathlib import Path
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-
 from infrastructure.aws_config import (
     AWS_PROFILE,
     AWS_REGION,
     S3_BUCKET,
 )
 
-def build_s3_key(local_file: Path) -> str:
+
+class S3UploadError(Exception):
     """
-    Convert a local path such as:
-
-    data/raw/year=2026/month=07/day=16/hour=16/file.jsonl
-
-    into an S3 object key such as:
-
-    raw/year=2026/month=07/day=16/hour=16/file.jsonl
+    Raised when a local file cannot be uploaded to S3.
     """
+
+
+def build_s3_key(
+    local_file: Path,
+    data_base_dir: Path = Path("data"),
+) -> str:
+    """
+    Build an S3 object key preserving the path below data/.
+
+    Example:
+
+    data/enriched/year=2026/month=07/file.parquet
+
+    becomes:
+
+    enriched/year=2026/month=07/file.parquet
+    """
+    local_file = Path(local_file)
+    data_base_dir = Path(data_base_dir)
+
     try:
-        relative_path = local_file.relative_to("data")
+        relative_path = local_file.relative_to(data_base_dir)
     except ValueError as error:
         raise ValueError(
-            "The file must be located inside the data directory."
+            f"The file must be located inside "
+            f"{data_base_dir}."
         ) from error
 
     return relative_path.as_posix()
@@ -33,11 +48,30 @@ def build_s3_key(local_file: Path) -> str:
 def upload_file_to_s3(
     local_file: Path,
     bucket: str = S3_BUCKET,
+    data_base_dir: Path = Path("data"),
 ) -> str:
+    """
+    Upload a file from the local data directory to S3.
+
+    The directory structure below data/ is preserved as the
+    S3 object key.
+    """
+    local_file = Path(local_file)
+
     if not local_file.exists():
         raise FileNotFoundError(
             f"Local file not found: {local_file}"
         )
+
+    if not local_file.is_file():
+        raise ValueError(
+            f"Local path is not a file: {local_file}"
+        )
+
+    object_key = build_s3_key(
+        local_file=local_file,
+        data_base_dir=data_base_dir,
+    )
 
     session = boto3.Session(
         profile_name=AWS_PROFILE,
@@ -45,7 +79,6 @@ def upload_file_to_s3(
     )
 
     s3_client = session.client("s3")
-    object_key = build_s3_key(local_file)
 
     try:
         s3_client.upload_file(
@@ -54,8 +87,9 @@ def upload_file_to_s3(
             Key=object_key,
         )
     except (BotoCoreError, ClientError) as error:
-        raise RuntimeError(
-            f"Unable to upload {local_file} to S3."
+        raise S3UploadError(
+            f"Unable to upload {local_file} "
+            f"to s3://{bucket}/{object_key}."
         ) from error
 
     return f"s3://{bucket}/{object_key}"
