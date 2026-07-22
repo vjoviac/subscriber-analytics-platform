@@ -28,3 +28,6 @@ data/
 # Coverage reports
 .coverage
 htmlcov/
+
+# Project status
+docs/project_status.md

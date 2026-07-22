@@ -1,26 +1,32 @@
 import pytest
-
+from generators.catalogs.subscribers import SUBSCRIBERS
 from generators.event_generator import (
+    generate_event,
     generate_events,
-    generate_imsi,
-    generate_msisdn,
 )
 
 
-def test_generate_msisdn_has_mexican_format() -> None:
-    msisdn = generate_msisdn()
+def test_generate_event_uses_consistent_subscriber_data() -> None:
+    event = generate_event()
 
-    assert msisdn.startswith("+52")
-    assert len(msisdn) == 13
-    assert msisdn[1:].isdigit()
+    subscriber = next(
+        item
+        for item in SUBSCRIBERS
+        if item["imsi"] == event["imsi"]
+    )
+
+    assert event["msisdn"] == subscriber["msisdn"]
 
 
-def test_generate_imsi_has_valid_length() -> None:
-    imsi = generate_imsi()
+def test_generate_event_uses_known_subscriber() -> None:
+    event = generate_event()
 
-    assert imsi.startswith("334")
-    assert len(imsi) == 15
-    assert imsi.isdigit()
+    valid_imsis = {
+        subscriber["imsi"]
+        for subscriber in SUBSCRIBERS
+    }
+
+    assert event["imsi"] in valid_imsis
 
 
 def test_generate_events_returns_expected_count() -> None:

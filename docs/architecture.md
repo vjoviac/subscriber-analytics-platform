@@ -1,5 +1,44 @@
-## Current modeling simplification
+# Subscriber Analytics Platform -- Technical Architecture
 
-For the initial prototype, reference catalogs are maintained in a single Python module and generated events include descriptive attributes.
+## Current architecture
 
-In a production architecture, raw events would contain primarily identifiers and measurements. A separate enrichment layer would join device, subscriber, network cell, and application reference data before loading curated analytical datasets.
+``` text
+generators/
+        │
+        ▼
+Raw layer (JSONL)
+data/raw/year=YYYY/month=MM/day=DD/hour=HH/
+        │
+        ▼
+Enrichment layer (Parquet)
+data/enriched/year=YYYY/month=MM/day=DD/hour=HH/
+        │
+        ▼
+Curated layer (Parquet)
+data/curated/
+```
+
+## Storage strategy
+
+-   Raw → JSONL
+-   Enriched → Parquet
+-   Curated → Parquet
+
+## Planned services
+
+-   Amazon S3
+-   Athena
+-   MongoDB Atlas
+-   Snowflake
+-   FastAPI
+-   Dashboards
+-   AI-powered insights
+
+## Version roadmap
+
+-   v0.1.0 → Raw ingestion
+-   v0.2.0 → Enrichment layer
+-   v0.3.0 → Curated datasets
+-   v0.4.0 → MongoDB integration
+-   v0.5.0 → Pipeline orchestration
+-   v1.0.0 → End-to-end platform

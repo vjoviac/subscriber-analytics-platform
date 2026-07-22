@@ -2,6 +2,44 @@
 
 Cloud-native platform designed to simulate, ingest, process and analyze telecommunications subscriber events.
 
+## Architecture
+
+┌─────────────────────┐
+│ Event Generator     │
+│ Python              │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Raw Layer           │
+│ JSONL               │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Enrichment Layer    │
+│ Parquet             │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Curated Layer       │
+│ Analytics datasets  │
+└──────────┬──────────┘
+           │
+           ├───────────────┐
+           ▼               ▼
+┌─────────────────┐  ┌─────────────────┐
+│ MongoDB Atlas   │  │ Snowflake       │
+│ Serving Layer   │  │ Analytics       │
+└────────┬────────┘  └────────┬────────┘
+         │                    │
+         └─────────┬──────────┘
+                   ▼
+      ┌────────────────────────┐
+      │ APIs / Dashboards / AI │
+      └────────────────────────┘
+
 ## Objectives
 
 - Build a modern telecom analytics architecture.
