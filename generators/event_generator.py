@@ -143,7 +143,7 @@ def generate_session(
         "packet_loss_pct": packet_loss_pct,
     }
 
-def generate_event() -> dict:
+def generate_event(event_time: datetime | None = None,) -> dict:
     application = random.choice(APPLICATIONS)
 
     subscriber = random.choice(SUBSCRIBERS)
@@ -165,9 +165,11 @@ def generate_event() -> dict:
         network=location,
     )
 
+    timestamp = event_time or datetime.now(UTC)
+
     return {
         "event_id": fake.uuid4(),
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": timestamp.isoformat(),
         "imsi": subscriber["imsi"],
         "msisdn": subscriber["msisdn"],
         "tac": device["tac"],
@@ -176,13 +178,13 @@ def generate_event() -> dict:
         **session,
     }
 
-def generate_events(total_events: int) -> list[dict]:
+def generate_events(total_events: int,event_time: datetime | None = None,) -> list[dict]:
     if total_events <= 0:
         raise ValueError(
             "total_events must be greater than zero"
         )
 
     return [
-        generate_event()
+        generate_event(event_time)
         for _ in range(total_events)
     ]

@@ -35,9 +35,11 @@ def parse_arguments() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-def build_output_file() -> Path:
+def build_output_file(
+    processing_time: datetime | None = None,
+) -> Path:
 
-    now = datetime.now(UTC)
+    now = processing_time or datetime.now(UTC)
 
     file_name = now.strftime(
         "subscriber_events_%Y%m%d_%H%M%S.jsonl"
