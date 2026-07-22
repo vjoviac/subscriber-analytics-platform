@@ -45,6 +45,39 @@ REQUIRED_COLUMNS = {
     "application_category",
 }
 
+HOURLY_REQUIRED_COLUMNS = {
+    "subscriber_id",
+    "imsi",
+    "msisdn",
+    "customer_segment",
+    "subscriber_status",
+    "plan_id",
+    "plan_name",
+    "plan_type",
+    "monthly_data_allowance_gb",
+    "max_download_mbps",
+    "max_upload_mbps",
+    "technology_access",
+    "latest_tac",
+    "latest_device_vendor",
+    "latest_device_model",
+    "latest_device_os",
+    "latest_device_technology",
+    "latest_cell_id",
+    "latest_city",
+    "latest_state",
+    "latest_network_technology",
+    "event_count",
+    "total_bytes_dl",
+    "total_bytes_ul",
+    "total_bytes",
+    "latency_sum",
+    "latency_sample_count",
+    "packet_loss_sum",
+    "packet_loss_sample_count",
+    "window_start",
+    "window_end",
+}
 
 def validate_required_columns(dataframe: pd.DataFrame) -> None:
     missing_columns = REQUIRED_COLUMNS - set(dataframe.columns)
@@ -282,20 +315,24 @@ def build_hourly_subscriber_activity(
 
     usage_metrics = (
         dataframe
-        .groupby(
-            "subscriber_id",
-            as_index=False,
-        )
+        .groupby("subscriber_id")
         .agg(
             event_count=("event_id", "count"),
+
             total_bytes_dl=("bytes_dl", "sum"),
             total_bytes_ul=("bytes_ul", "sum"),
             total_bytes=("total_bytes", "sum"),
+
             avg_latency_ms=("latency_ms", "mean"),
             avg_packet_loss_pct=("packet_loss_pct", "mean"),
-            first_seen=("timestamp", "min"),
-            last_seen=("timestamp", "max"),
+
+            latency_sum=("latency_ms", "sum"),
+            latency_sample_count=("latency_ms", "count"),
+
+            packet_loss_sum=("packet_loss_pct", "sum"),
+            packet_loss_sample_count=("packet_loss_pct", "count"),
         )
+        .reset_index()
     )
 
     usage_metrics["avg_latency_ms"] = (
@@ -336,6 +373,273 @@ def build_hourly_subscriber_activity(
     if output_file is None:
         output_file = build_hourly_output_path(
             enriched_partition
+        )
+    else:
+        output_file = Path(output_file)
+        output_file.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+    table = pa.Table.from_pandas(
+        subscriber_activity,
+        preserve_index=False,
+    )
+
+    pq.write_table(
+        table,
+        output_file,
+        compression="snappy",
+    )
+    
+    return output_file
+
+#Code for daily subscriber activity.
+
+def validate_hourly_required_columns(dataframe: pd.DataFrame) -> None:
+    missing_columns = HOURLY_REQUIRED_COLUMNS - set(dataframe.columns)
+
+    if missing_columns:
+        missing = ", ".join(sorted(missing_columns))
+        raise CuratedDatasetError(
+            f"Missing required hourly columns: {missing}"
+        )
+
+def build_daily_output_path(
+    hourly_day_partition: Path,
+    curated_base_dir: Path = Path("data/curated"),
+    ) -> Path:
+    hourly_day_partition = Path(hourly_day_partition)
+    
+    try:
+        partition_path = hourly_day_partition.relative_to(
+            Path("data/curated/subscriber_activity_hourly")
+        )
+    except ValueError as error:
+        raise CuratedDatasetError(
+            "The hourly partition must be located inside data/curated/subscriber_activity_hourly."
+        ) from error
+
+    output_directory = (
+        curated_base_dir
+        / "subscriber_activity_daily"
+        / partition_path
+    )
+
+    output_directory.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    return output_directory / "subscriber_activity_daily.parquet"
+
+def validate_hourly_partition(
+    hourly_day_partition: Path,
+) -> list[Path]:
+    hourly_day_partition = Path(hourly_day_partition)
+
+    if not hourly_day_partition.exists():
+        raise FileNotFoundError(
+            f"Hourly partition not found: {hourly_day_partition}"
+        )
+
+    if not hourly_day_partition.is_dir():
+        raise NotADirectoryError(
+            f"Expected an hourly partition directory: "
+            f"{hourly_day_partition}"
+        )
+
+    input_files = sorted(
+        hourly_day_partition.glob(
+            "hour=*/subscriber_activity_hourly.parquet"
+        )
+    )
+
+    if not input_files:
+        raise FileNotFoundError(
+            f"No hourly Parquet files found in: "
+            f"{hourly_day_partition}"
+        )
+
+    return input_files
+
+def build_daily_subscriber_activity(
+    hourly_day_partition: Path,
+    output_file: Path | None = None,
+) -> Path:
+    hourly_day_partition = Path(hourly_day_partition)
+
+    input_files = validate_hourly_partition(hourly_day_partition)
+
+    dataframes = [
+        pd.read_parquet(input_file)
+        for input_file in input_files
+    ]
+
+    dataframe = pd.concat(
+        dataframes,
+        ignore_index=True,
+    )
+
+    if dataframe.empty:
+        raise CuratedDatasetError(
+            "No hourly subscriber activity data found in the "
+            "hourly partition."
+        )
+
+    validate_hourly_required_columns(dataframe)
+
+    dataframe["window_start"] = pd.to_datetime(
+        dataframe["window_start"],
+        utc=True,
+        errors="coerce",
+    )
+
+    dataframe["window_end"] = pd.to_datetime(
+        dataframe["window_end"],
+        utc=True,
+        errors="coerce",
+    )
+
+    if dataframe["window_start"].isna().any():
+        raise CuratedDatasetError(
+            "Invalid window_start values were found in the "
+            "hourly partition."
+        )
+
+    if dataframe["window_end"].isna().any():
+        raise CuratedDatasetError(
+            "Invalid window_end values were found in the "
+            "hourly partition."
+        )
+
+    event_days = (
+        dataframe["window_start"]
+        .dt.floor("D")
+        .unique()
+    )
+
+    if len(event_days) != 1:
+        raise CuratedDatasetError(
+            "The hourly partition contains records from "
+            "more than one daily window."
+        )
+
+    window_start = pd.Timestamp(event_days[0])
+    window_end = window_start + pd.Timedelta(days=1)
+
+    invalid_windows = (
+        (dataframe["window_start"] < window_start)
+        | (dataframe["window_start"] >= window_end)
+        | (dataframe["window_end"] <= window_start)
+        | (dataframe["window_end"] > window_end)
+    )
+
+    if invalid_windows.any():
+        raise CuratedDatasetError(
+            "The hourly partition contains windows outside "
+            "the expected daily range."
+        )
+
+    latest_records = (
+        dataframe
+        .sort_values(
+            by=["subscriber_id", "window_end", "window_start",]
+        )
+        .drop_duplicates(
+            subset=["subscriber_id"],
+            keep="last",
+        )
+        [
+            [
+                "subscriber_id",
+                "imsi",
+                "msisdn",
+                "customer_segment",
+                "subscriber_status",
+                "plan_id",
+                "plan_name",
+                "plan_type",
+                "monthly_data_allowance_gb",
+                "max_download_mbps",
+                "max_upload_mbps",
+                "technology_access",
+                "latest_tac",
+                "latest_device_vendor",
+                "latest_device_model",
+                "latest_device_os",
+                "latest_device_technology",
+                "latest_cell_id",
+                "latest_city",
+                "latest_state",
+                "latest_network_technology",
+            ]
+        ]
+    )
+
+    daily_metrics = (
+        dataframe
+        .groupby("subscriber_id")
+        .agg(
+            event_count=("event_count", "sum"),
+
+            total_bytes_dl=("total_bytes_dl", "sum"),
+            total_bytes_ul=("total_bytes_ul", "sum"),
+            total_bytes=("total_bytes", "sum"),
+
+            latency_sum=("latency_sum", "sum"),
+            latency_sample_count=(
+                "latency_sample_count",
+                "sum",
+            ),
+
+            packet_loss_sum=("packet_loss_sum", "sum"),
+            packet_loss_sample_count=(
+                "packet_loss_sample_count",
+                "sum",
+            ),
+        )
+        .reset_index()
+    )
+
+    daily_metrics["avg_latency_ms"] = (
+        daily_metrics["latency_sum"]
+        .div(
+            daily_metrics["latency_sample_count"]
+            .replace(0, pd.NA)
+        )
+        .round(2)
+    )
+
+    daily_metrics["avg_packet_loss_pct"] = (
+        daily_metrics["packet_loss_sum"]
+        .div(
+            daily_metrics["packet_loss_sample_count"]
+            .replace(0, pd.NA)
+        )
+        .round(4)
+    )
+
+    subscriber_activity = latest_records.merge(
+        daily_metrics,
+        on="subscriber_id",
+        how="inner",
+    )
+
+    subscriber_activity["aggregation_grain"] = "daily"
+    subscriber_activity["window_start"] = window_start
+    subscriber_activity["window_end"] = window_end
+    subscriber_activity["curated_at"] = datetime.now(
+        timezone.utc
+    )
+
+    subscriber_activity = subscriber_activity.sort_values(
+        by="subscriber_id"
+    ).reset_index(drop=True)
+
+    if output_file is None:
+        output_file = build_daily_output_path(
+            hourly_day_partition
         )
     else:
         output_file = Path(output_file)

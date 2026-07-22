@@ -145,7 +145,9 @@ def test_build_hourly_subscriber_activity_calculates_usage_metrics(
         output_file=output_file,
     )
 
-    profile = pd.read_parquet(result).iloc[0]
+    profiles = pd.read_parquet(result)
+
+    profile = profiles.iloc[0]
 
     assert profile["event_count"] == 2
     assert profile["total_bytes_dl"] == 6000
@@ -153,6 +155,16 @@ def test_build_hourly_subscriber_activity_calculates_usage_metrics(
     assert profile["total_bytes"] == 6600
     assert profile["avg_latency_ms"] == 50.0
     assert profile["avg_packet_loss_pct"] == 0.2
+
+    subscriber_1 = profiles.loc[
+        profiles["subscriber_id"] == "SUB_000001"
+    ].iloc[0]
+
+    assert subscriber_1["latency_sum"] == 100.0
+    assert subscriber_1["latency_sample_count"] == 2
+
+    assert subscriber_1["packet_loss_sum"] == 0.4
+    assert subscriber_1["packet_loss_sample_count"] == 2
 
 def test_build_hourly_subscriber_activity_uses_latest_context(
     tmp_path: Path,
