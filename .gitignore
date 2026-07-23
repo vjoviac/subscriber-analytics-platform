@@ -18,6 +18,8 @@ Thumbs.db
 
 # Local data
 data/
+logs/
+reports/
 
 # Secrets
 .env

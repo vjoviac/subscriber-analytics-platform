@@ -1,9 +1,10 @@
 import argparse
+import json
+import logging
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-
-from dataclasses import dataclass
-import shutil
+from time import perf_counter
 
 import pandas as pd
 
@@ -11,16 +12,29 @@ from analytics.subscriber_profiles import (
     build_daily_subscriber_activity,
     build_hourly_subscriber_activity,
 )
+from config.settings import (
+    DATA_DIRECTORY,
+    DEFAULT_EVENT_COUNT,
+    ENRICHED_DATA_DIRECTORY,
+    HOURLY_ACTIVITY_DIRECTORY,
+    RAW_DATA_DIRECTORY,
+    REPORT_DIRECTORY,
+)
 from enrichment.enrichment_processor import (
     process_raw_file,
 )
 from generators.event_generator import (
     generate_events,
 )
-from main import (
-    build_output_file,
+from infrastructure.logging_config import (
+    configure_logging,
+)
+from main import build_output_file
+from storage.storage_manager import (
     save_events_to_jsonl,
 )
+
+logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class HourlyPipelinePaths:
@@ -40,6 +54,100 @@ class HourlyPipelinePaths:
             if path.exists()
         ]
 
+@dataclass
+class PipelineRunReport:
+    run_id: str
+    processing_date: str
+    requested_hours: list[int]
+    events_per_hour: int
+    execution_mode: str
+
+    status: str = "RUNNING"
+    validation_status: str = "NOT_RUN"
+
+    started_at: str = ""
+    completed_at: str | None = None
+    duration_seconds: float | None = None
+
+    processed_hours: list[int] = field(
+        default_factory=list
+    )
+    skipped_hours: list[int] = field(
+        default_factory=list
+    )
+    reprocessed_hours: list[int] = field(
+        default_factory=list
+    )
+
+    generated_event_count: int = 0
+    raw_event_count: int = 0
+    hourly_event_count: int = 0
+    daily_event_count: int = 0
+
+    raw_files: list[str] = field(
+        default_factory=list
+    )
+    enriched_files: list[str] = field(
+        default_factory=list
+    )
+    hourly_files: list[str] = field(
+        default_factory=list
+    )
+
+    daily_file: str | None = None
+    log_file: str | None = None
+    report_file: str | None = None
+
+    error_type: str | None = None
+    error_message: str | None = None
+
+def build_run_id() -> str:
+    return datetime.now(UTC).strftime(
+        "%Y%m%dT%H%M%S%fZ"
+    )
+
+
+def determine_execution_mode(
+    skip_existing: bool,
+    overwrite: bool,
+) -> str:
+    if overwrite:
+        return "OVERWRITE"
+
+    if skip_existing:
+        return "SKIP_EXISTING"
+
+    return "SAFE"
+
+def build_report_file(
+    run_id: str,
+    report_directory: Path = REPORT_DIRECTORY,
+) -> Path:
+    return (
+        report_directory
+        / f"pipeline_run_{run_id}.json"
+    )
+
+def write_pipeline_report(
+    report: PipelineRunReport,
+    report_file: Path,
+) -> None:
+    report_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    with report_file.open(
+        mode="w",
+        encoding="utf-8",
+    ) as output_file:
+        json.dump(
+            asdict(report),
+            output_file,
+            indent=2,
+            ensure_ascii=False,
+        )
+
 def build_hourly_pipeline_paths(
     processing_time: datetime,
 ) -> HourlyPipelinePaths:
@@ -48,28 +156,29 @@ def build_hourly_pipeline_paths(
     )
 
     partition = (
-        f"year={processing_time.year:04d}"
-        f"/month={processing_time.month:02d}"
-        f"/day={processing_time.day:02d}"
-        f"/hour={processing_time.hour:02d}"
+        Path(f"year={processing_time.year:04d}")
+        / f"month={processing_time.month:02d}"
+        / f"day={processing_time.day:02d}"
+        / f"hour={processing_time.hour:02d}"
     )
 
     raw_file = (
-        Path("data/raw")
+        RAW_DATA_DIRECTORY
         / partition
         / f"subscriber_events_{timestamp}.jsonl"
     )
 
     enriched_file = (
-        Path("data/enriched")
+        ENRICHED_DATA_DIRECTORY
         / partition
-        / f"enriched_subscriber_events_{timestamp}.parquet"
+        / (
+            "enriched_subscriber_events_"
+            f"{timestamp}.parquet"
+        )
     )
 
     hourly_file = (
-        Path(
-            "data/curated/subscriber_activity_hourly"
-        )
+        HOURLY_ACTIVITY_DIRECTORY
         / partition
         / "subscriber_activity_hourly.parquet"
     )
@@ -141,8 +250,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--events-per-hour",
         type=int,
-        default=500,
-        help="Number of events to generate per hour.",
+        default=DEFAULT_EVENT_COUNT,
+        help=(
+            "Number of events to generate per hour. "
+            f"Default: {DEFAULT_EVENT_COUNT}."
+        ),
     )
 
     processing_mode = parser.add_mutually_exclusive_group()
@@ -180,7 +292,7 @@ def validate_arguments(
     unique_hours = sorted(set(hours))
 
     if len(unique_hours) != len(hours):
-        print(
+        logger.warning(
             "Warning: duplicate hours were removed."
         )
 
@@ -204,7 +316,7 @@ def build_enriched_partition(
     processing_time: datetime,
 ) -> Path:
     return (
-        Path("data/enriched")
+        ENRICHED_DATA_DIRECTORY
         / f"year={processing_time.year:04d}"
         / f"month={processing_time.month:02d}"
         / f"day={processing_time.day:02d}"
@@ -216,9 +328,7 @@ def build_hourly_day_partition(
     processing_date: date,
 ) -> Path:
     return (
-        Path(
-            "data/curated/subscriber_activity_hourly"
-        )
+        HOURLY_ACTIVITY_DIRECTORY
         / f"year={processing_date.year:04d}"
         / f"month={processing_date.month:02d}"
         / f"day={processing_date.day:02d}"
@@ -228,38 +338,40 @@ def prepare_hour_for_processing(
     paths: HourlyPipelinePaths,
     skip_existing: bool,
     overwrite: bool,
-) -> bool:
+) -> str:
     existing_paths = paths.existing_paths
 
     if not existing_paths:
-        return True
+        return "PROCESS"
 
     if skip_existing:
-        print(
-            "Existing outputs detected. "
-            "Skipping this hour:"
+        logger.warning(
+            "hour_action=skip reason=existing_outputs "
+            "existing_files=%s",
+            [str(path) for path in existing_paths],
         )
 
-        for path in existing_paths:
-            print(f"  - {path}")
-
-        return False
+        return "SKIP"
 
     if overwrite:
-        print(
-            "Existing outputs detected. "
-            "Removing them before reprocessing:"
+        logger.warning(
+            "hour_action=reprocess reason=existing_outputs "
+            "existing_files=%s",
+            [str(path) for path in existing_paths],
         )
 
         for path in existing_paths:
-            print(f"  - {path}")
+            logger.info(
+                "action=delete path=%s",
+                path,
+            )
             path.unlink()
 
         remove_empty_parent_directories(
             paths=existing_paths
         )
 
-        return True
+        return "REPROCESS"
 
     existing_outputs = "\n".join(
         f"  - {path}"
@@ -277,7 +389,7 @@ def prepare_hour_for_processing(
 def remove_empty_parent_directories(
     paths: list[Path],
 ) -> None:
-    data_directory = Path("data").resolve()
+    data_directory = DATA_DIRECTORY.resolve()
 
     for path in paths:
         parent = path.parent
@@ -299,9 +411,9 @@ def validate_pipeline_counts(
     processing_date: date,
     hourly_day_partition: Path,
     daily_output_file: Path,
-) -> None:
+) -> dict[str, int]:
     raw_day_partition = (
-        Path("data/raw")
+        RAW_DATA_DIRECTORY
         / f"year={processing_date.year:04d}"
         / f"month={processing_date.month:02d}"
         / f"day={processing_date.day:02d}"
@@ -353,12 +465,14 @@ def validate_pipeline_counts(
         daily_dataframe["event_count"].sum()
     )
 
-    print()
-    print("Pipeline validation")
-    print("-------------------")
-    print(f"Raw events:     {raw_event_count}")
-    print(f"Hourly events:  {hourly_event_count}")
-    print(f"Daily events:   {daily_event_count}")
+    logger.info(
+        "stage=validation status=completed "
+        "raw_events=%d hourly_events=%d "
+        "daily_events=%d",
+        raw_event_count,
+        hourly_event_count,
+        daily_event_count,
+    )
 
     if not (
         raw_event_count
@@ -371,7 +485,14 @@ def validate_pipeline_counts(
             "do not match."
         )
 
-    print("Validation result: PASSED")
+    logger.info(
+        "stage=validation result=passed"
+    )
+    return {
+        "raw_event_count": raw_event_count,
+        "hourly_event_count": hourly_event_count,
+        "daily_event_count": daily_event_count,
+    }
 
 def count_jsonl_records(file_path: Path) -> int:
     """
@@ -394,113 +515,254 @@ def run_daily_pipeline(
     skip_existing: bool = False,
     overwrite: bool = False,
 ) -> Path:
-    
-    print(
-        f"Starting pipeline for {processing_date.isoformat()}"
+    run_id = build_run_id()
+    started_at = datetime.now(UTC)
+    start_counter = perf_counter()
+
+    log_file = configure_logging(
+        run_id=run_id
     )
-    print(
-        f"Hours: {', '.join(f'{hour:02d}' for hour in hours)}"
+
+    report_file = build_report_file(
+        run_id=run_id
     )
-    print(f"Events per hour: {events_per_hour}")
-    print()
 
-    for hour in hours:
-        processing_time = build_processing_time(
-            processing_date,
-            hour,
-        )
-
-        paths = build_hourly_pipeline_paths(
-            processing_time
-        )
-
-        should_process = prepare_hour_for_processing(
-            paths=paths,
+    report = PipelineRunReport(
+        run_id=run_id,
+        processing_date=processing_date.isoformat(),
+        requested_hours=hours,
+        events_per_hour=events_per_hour,
+        execution_mode=determine_execution_mode(
             skip_existing=skip_existing,
             overwrite=overwrite,
-        )
+        ),
+        started_at=started_at.isoformat(),
+        log_file=str(log_file),
+        report_file=str(report_file),
+    )
 
-        if not should_process:
-            print()
-            continue
+    logger.info(
+        "pipeline_status=started run_id=%s "
+        "processing_date=%s hours=%s "
+        "events_per_hour=%d execution_mode=%s",
+        run_id,
+        processing_date.isoformat(),
+        hours,
+        events_per_hour,
+        report.execution_mode,
+    )
 
-        print(
-            f"[{hour:02d}:00] Generating raw events..."
-        )
+    try:
+        for hour in hours:
+            processing_time = build_processing_time(
+                processing_date,
+                hour,
+            )
 
-        events = generate_events(
-            total_events=events_per_hour,
-            event_time=processing_time,
-        )
+            paths = build_hourly_pipeline_paths(
+                processing_time
+            )
 
-        raw_output_file = build_output_file(
-            processing_time=processing_time,
-        )
+            processing_action = (
+                prepare_hour_for_processing(
+                    paths=paths,
+                    skip_existing=skip_existing,
+                    overwrite=overwrite,
+                )
+            )
 
-        save_events_to_jsonl(
-            events,
-            raw_output_file,
-        )
+            if processing_action == "SKIP":
+                report.skipped_hours.append(hour)
 
-        print(
-            f"[{hour:02d}:00] Raw file: "
-            f"{raw_output_file}"
-        )
+                logger.info(
+                    "hour=%02d status=skipped",
+                    hour,
+                )
+                continue
 
-        print(
-            f"[{hour:02d}:00] Enriching raw events..."
-        )
+            if processing_action == "REPROCESS":
+                report.reprocessed_hours.append(hour)
 
-        enriched_output_file = process_raw_file(
-            raw_output_file
-        )
+                logger.info(
+                    "hour=%02d status=reprocessing",
+                    hour,
+                )
 
-        print(
-            f"[{hour:02d}:00] Enriched file: "
-            f"{enriched_output_file}"
-        )
+            logger.info(
+                "hour=%02d stage=generation "
+                "status=started",
+                hour,
+            )
 
-        enriched_partition = build_enriched_partition(
-            processing_time
-        )
+            events = generate_events(
+                total_events=events_per_hour,
+                event_time=processing_time,
+            )
 
-        print(
-            f"[{hour:02d}:00] Building hourly metrics..."
-        )
+            raw_output_file = build_output_file(
+                processing_time=processing_time,
+            )
 
-        hourly_output_file = (
-            build_hourly_subscriber_activity(
-                enriched_partition
+            save_events_to_jsonl(
+                events=events,
+                output_file=raw_output_file,
+            )
+
+            logger.info(
+                "hour=%02d stage=generation "
+                "status=completed events=%d "
+                "output_file=%s",
+                hour,
+                len(events),
+                raw_output_file,
+            )
+
+            logger.info(
+                "hour=%02d stage=enrichment "
+                "status=started",
+                hour,
+            )
+
+            enriched_output_file = process_raw_file(
+                raw_output_file
+            )
+
+            logger.info(
+                "hour=%02d stage=enrichment "
+                "status=completed output_file=%s",
+                hour,
+                enriched_output_file,
+            )
+
+            enriched_partition = (
+                build_enriched_partition(
+                    processing_time
+                )
+            )
+
+            logger.info(
+                "hour=%02d "
+                "stage=hourly_aggregation "
+                "status=started",
+                hour,
+            )
+
+            hourly_output_file = (
+                build_hourly_subscriber_activity(
+                    enriched_partition
+                )
+            )
+
+            logger.info(
+                "hour=%02d "
+                "stage=hourly_aggregation "
+                "status=completed output_file=%s",
+                hour,
+                hourly_output_file,
+            )
+
+            report.processed_hours.append(hour)
+            report.generated_event_count += len(events)
+
+            report.raw_files.append(
+                str(raw_output_file)
+            )
+            report.enriched_files.append(
+                str(enriched_output_file)
+            )
+            report.hourly_files.append(
+                str(hourly_output_file)
+            )
+
+        hourly_day_partition = (
+            build_hourly_day_partition(
+                processing_date
             )
         )
 
-        print(
-            f"[{hour:02d}:00] Hourly file: "
-            f"{hourly_output_file}"
+        logger.info(
+            "stage=daily_aggregation status=started"
         )
-        print()
 
-    hourly_day_partition = build_hourly_day_partition(
-        processing_date
-    )
-
-    print("Building daily subscriber activity...")
-
-    daily_output_file = (
-        build_daily_subscriber_activity(
-            hourly_day_partition
+        daily_output_file = (
+            build_daily_subscriber_activity(
+                hourly_day_partition
+            )
         )
-    )
 
-    print(f"Daily file: {daily_output_file}")
+        logger.info(
+            "stage=daily_aggregation "
+            "status=completed output_file=%s",
+            daily_output_file,
+        )
 
-    validate_pipeline_counts(
-        processing_date=processing_date,
-        hourly_day_partition=hourly_day_partition,
-        daily_output_file=daily_output_file,
-    )
+        report.daily_file = str(daily_output_file)
 
-    return daily_output_file
+        validation_counts = validate_pipeline_counts(
+            processing_date=processing_date,
+            hourly_day_partition=(
+                hourly_day_partition
+            ),
+            daily_output_file=daily_output_file,
+        )
+
+        report.raw_event_count = (
+            validation_counts["raw_event_count"]
+        )
+        report.hourly_event_count = (
+            validation_counts["hourly_event_count"]
+        )
+        report.daily_event_count = (
+            validation_counts["daily_event_count"]
+        )
+
+        report.validation_status = "PASSED"
+        report.status = "SUCCEEDED"
+
+        return daily_output_file
+
+    except Exception as error:
+        report.status = "FAILED"
+
+        if isinstance(error, RuntimeError):
+            report.validation_status = "FAILED"
+
+        report.error_type = type(error).__name__
+        report.error_message = str(error)
+
+        logger.exception(
+            "pipeline_status=failed run_id=%s",
+            run_id,
+        )
+
+        raise
+
+    finally:
+        completed_at = datetime.now(UTC)
+
+        report.completed_at = (
+            completed_at.isoformat()
+        )
+
+        report.duration_seconds = round(
+            perf_counter() - start_counter,
+            3,
+        )
+
+        write_pipeline_report(
+            report=report,
+            report_file=report_file,
+        )
+
+        logger.info(
+            "pipeline_status=%s run_id=%s "
+            "duration_seconds=%.3f "
+            "report_file=%s",
+            report.status.lower(),
+            run_id,
+            report.duration_seconds,
+            report_file,
+        )
 
 
 def main() -> None:
