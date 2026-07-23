@@ -1,44 +1,561 @@
-# Subscriber Analytics Platform -- Technical Architecture
+# Subscriber Analytics Platform — Architecture
 
-## Current architecture
+## 1. Purpose
 
-``` text
-generators/
-        │
-        ▼
-Raw layer (JSONL)
-data/raw/year=YYYY/month=MM/day=DD/hour=HH/
-        │
-        ▼
-Enrichment layer (Parquet)
-data/enriched/year=YYYY/month=MM/day=DD/hour=HH/
-        │
-        ▼
-Curated layer (Parquet)
-data/curated/
+Subscriber Analytics Platform is a modular telecommunications data platform designed to demonstrate how subscriber events move from generation and ingestion to analytics and application consumption.
+
+The architecture supports two goals:
+
+1. Build a reliable pipeline that produces trustworthy data products.
+2. Demonstrate solution architecture decisions across data engineering, cloud storage, serving, APIs, observability, and analytics.
+
+The platform currently runs as a batch pipeline. Its target state adds an operational serving layer, API, dashboard, and cloud-native analytical query path.
+
+---
+
+## 2. Scope
+
+### In scope
+
+- Synthetic telecom event generation.
+- File-based batch ingestion.
+- Immutable raw storage.
+- Reference-data enrichment.
+- Hourly and daily subscriber aggregation.
+- Current subscriber profile materialization.
+- Object storage integration.
+- MongoDB Atlas serving.
+- FastAPI exposure.
+- Dashboard consumption.
+- Data quality validation.
+- Structured logging and execution reporting.
+- AWS Glue and Athena integration.
+- A future streaming extension.
+
+### Out of scope for the current phase
+
+- Real subscriber data.
+- Real-time network control.
+- Production subscriber identity management.
+- Regulatory reporting.
+- Personally identifiable information.
+- Carrier-grade availability guarantees.
+- Multi-region disaster recovery.
+- Full enterprise IAM federation.
+- Production machine-learning models.
+
+---
+
+## 3. Architectural principles
+
+### 3.1 Layered data architecture
+
+Each layer has one responsibility:
+
+- **Raw:** preserve the original event.
+- **Enriched:** attach reference data and normalize fields.
+- **Curated:** create stable analytical data products.
+- **Serving:** provide low-latency, application-oriented access.
+- **API:** enforce a controlled access contract.
+- **Presentation:** expose operational insights.
+
+### 3.2 Immutable raw data
+
+Raw events are not modified after publication. This supports replay, debugging, traceability, and reprocessing after logic changes.
+
+### 3.3 Separation of storage and compute
+
+Transformation logic is not tied to a single execution engine. Local execution can later be replaced by managed services while preserving layer contracts.
+
+### 3.4 Idempotent processing
+
+A stage should create a valid output, intentionally skip it, intentionally overwrite it, or fail without leaving a misleading partial result.
+
+### 3.5 Atomic publication
+
+Authoritative datasets should be written to a temporary path and then moved to their final path so consumers never see incomplete files.
+
+### 3.6 Observable execution
+
+Every run should answer:
+
+- What ran?
+- For which date and hours?
+- Which stages were created, skipped, overwritten, or failed?
+- How many records entered and left each stage?
+- Did validation pass?
+- Why did a run fail?
+
+### 3.7 Explicit contracts
+
+Schemas, required fields, partitioning, grain, and output paths are contracts. Silent schema drift is not accepted.
+
+### 3.8 Incremental evolution
+
+Each architectural capability is implemented and validated independently before orchestration integration.
+
+---
+
+## 4. Current-state architecture
+
+```text
+Event Generator
+      ↓
+Raw Storage — JSONL
+      ↓
+Enrichment — Parquet
+      ↓
+Hourly Subscriber Activity
+      ↓
+Daily Subscriber Activity
+      ↓
+Validation
+
+Cross-cutting capabilities:
+- centralized configuration;
+- structured logging;
+- execution reports;
+- rerun controls;
+- unit tests;
+- S3 upload support.
 ```
 
-## Storage strategy
+---
 
--   Raw → JSONL
--   Enriched → Parquet
--   Curated → Parquet
+## 5. Target architecture
 
-## Planned services
+```text
+Reference Catalogs
+      │
+      ▼
+Event Generator
+      ↓
+Raw Layer — JSONL — Local / Amazon S3
+      ↓
+Enrichment Layer — Parquet
+      ↓
+Curated Layer — Hourly and Daily
+      ├──────────────────────────────┐
+      ▼                              ▼
+Current Subscriber Profiles         AWS Glue + Athena
+      ↓                              ↓
+MongoDB Atlas                        Analytical Queries
+      ↓
+FastAPI
+      ↓
+Dashboard
+```
 
--   Amazon S3
--   Athena
--   MongoDB Atlas
--   Snowflake
--   FastAPI
--   Dashboards
--   AI-powered insights
+---
 
-## Version roadmap
+## 6. Component responsibilities
 
--   v0.1.0 → Raw ingestion
--   v0.2.0 → Enrichment layer
--   v0.3.0 → Curated datasets
--   v0.4.0 → MongoDB integration
--   v0.5.0 → Pipeline orchestration
--   v1.0.0 → End-to-end platform
+### 6.1 Event generator
+
+**Location:** `generators/`
+
+Responsibilities:
+
+- produce realistic telecom events;
+- generate unique event identifiers;
+- generate UTC timestamps;
+- select valid catalog values;
+- enforce device and technology compatibility;
+- create session metrics;
+- support injected processing time.
+
+The generator does not persist, enrich, aggregate, or upload data.
+
+### 6.2 Catalogs and reference data
+
+Reference data includes:
+
+- subscriber plans;
+- TAC-based device models;
+- application names and categories;
+- locations and cells;
+- supported network technologies.
+
+Catalogs enrich events and should be independently maintainable.
+
+### 6.3 Raw storage
+
+**Format:** JSONL  
+**Partitioning:**
+
+```text
+data/raw/year=YYYY/month=MM/day=DD/hour=HH/
+```
+
+Responsibilities:
+
+- preserve source events;
+- enable replay;
+- support line-level inspection;
+- isolate hourly processing units.
+
+Raw data is generated and excluded from Git.
+
+### 6.4 Enrichment
+
+**Format:** Parquet  
+**Partitioning:**
+
+```text
+data/enriched/year=YYYY/month=MM/day=DD/hour=HH/
+```
+
+Responsibilities:
+
+- validate raw fields;
+- join reference data;
+- normalize types;
+- derive analytical columns;
+- preserve event-level grain;
+- produce typed Parquet output.
+
+Enrichment must not aggregate events.
+
+### 6.5 Hourly curated data
+
+**Dataset:** `subscriber_activity_hourly`
+
+Responsibilities:
+
+- aggregate by subscriber and hour;
+- calculate event counts and traffic volumes;
+- select latest dimensional values within the hour;
+- preserve sums and sample counts for quality metrics;
+- provide stable daily-aggregation input.
+
+### 6.6 Daily curated data
+
+**Dataset:** `subscriber_activity_daily`
+
+Responsibilities:
+
+- combine hourly partitions for one day;
+- preserve latest daily subscriber state;
+- accumulate daily usage;
+- preserve weighted-average components;
+- reject duplicate subscriber windows.
+
+### 6.7 Current subscriber profiles
+
+**Dataset:** `subscriber_profiles_current`
+
+Expected path:
+
+```text
+data/curated/subscriber_profiles_current/
+└── subscriber_profiles_current.parquet
+```
+
+Responsibilities:
+
+- read all daily partitions;
+- produce one row per subscriber;
+- select the latest dimensional state;
+- accumulate historical metrics;
+- calculate weighted lifetime quality metrics;
+- publish atomically;
+- provide MongoDB synchronization input.
+
+The snapshot is not date-partitioned because it represents current state.
+
+### 6.8 MongoDB Atlas
+
+MongoDB is the operational serving store.
+
+Responsibilities:
+
+- provide low-latency profile retrieval;
+- support document-oriented profiles;
+- index common lookup and filtering fields;
+- decouple API access from Parquet scans.
+
+MongoDB is not the historical system of record.
+
+### 6.9 FastAPI
+
+Responsibilities:
+
+- expose profile endpoints;
+- validate request parameters;
+- serialize stable response models;
+- isolate clients from MongoDB implementation details;
+- provide health, readiness, pagination, and OpenAPI documentation.
+
+### 6.10 Dashboard
+
+Responsibilities:
+
+- consume the API;
+- display platform and subscriber insights;
+- demonstrate end-to-end consumption;
+- avoid direct database credentials.
+
+### 6.11 AWS analytical services
+
+Planned services:
+
+- Amazon S3 for durable object storage.
+- AWS Glue Data Catalog for metadata.
+- Amazon Athena for serverless SQL.
+- CloudWatch or equivalent for centralized logs.
+- EventBridge, Step Functions, Glue Jobs, ECS, or MWAA as future execution options.
+
+---
+
+## 7. Storage architecture
+
+### 7.1 Local layout
+
+```text
+data/
+├── raw/
+├── enriched/
+└── curated/
+    ├── subscriber_activity_hourly/
+    ├── subscriber_activity_daily/
+    └── subscriber_profiles_current/
+```
+
+### 7.2 Cloud layout
+
+```text
+s3://<bucket>/
+├── raw/
+│   └── year=YYYY/month=MM/day=DD/hour=HH/
+├── enriched/
+│   └── year=YYYY/month=MM/day=DD/hour=HH/
+└── curated/
+    ├── subscriber_activity_hourly/
+    ├── subscriber_activity_daily/
+    └── subscriber_profiles_current/
+```
+
+### 7.3 File-format strategy
+
+| Layer | Format | Rationale |
+|---|---|---|
+| Raw | JSONL | Human-readable, event-oriented, replay-friendly |
+| Enriched | Parquet | Typed, compressed, analytical |
+| Curated | Parquet | Efficient scans and cloud SQL compatibility |
+| Serving | BSON documents | Low-latency document retrieval |
+
+### 7.4 Partitioning strategy
+
+- Raw and enriched: year, month, day, hour.
+- Hourly curated: year, month, day, hour.
+- Daily curated: year, month, day.
+- Current profiles: no date partition.
+
+Excessive partitioning is avoided to reduce small-file and metadata overhead.
+
+---
+
+## 8. Data flow and consistency
+
+```text
+Raw event
+    ↓ one-to-one
+Enriched event
+    ↓ many-to-one by subscriber and hour
+Hourly activity
+    ↓ many-to-one by subscriber and day
+Daily activity
+    ↓ many-to-one across days
+Current profile
+```
+
+Primary reconciliation invariant:
+
+```text
+raw event count
+=
+sum(hourly event_count)
+=
+sum(daily event_count)
+```
+
+The pipeline also preserves quality metric sums and sample counts so higher-level averages remain mathematically correct.
+
+---
+
+## 9. Execution architecture
+
+The daily orchestrator runs:
+
+```text
+For each requested hour:
+    generate
+    write raw
+    enrich
+    aggregate hourly
+
+After all requested hours:
+    aggregate daily
+    validate
+    publish execution report
+```
+
+The orchestrator coordinates stages but does not duplicate their transformation logic.
+
+---
+
+## 10. Rerun model
+
+### SAFE
+
+Fails when an output already exists. Best for production-like protection.
+
+### SKIP_EXISTING
+
+Reuses completed outputs and continues with missing stages. Best for recovery and iterative development.
+
+### OVERWRITE
+
+Intentionally replaces outputs. Best after logic or schema changes.
+
+Every output-producing stage must apply the selected mode consistently.
+
+---
+
+## 11. Observability
+
+### Structured logging
+
+Recommended context:
+
+- run identifier;
+- processing date and hour;
+- pipeline stage;
+- execution mode;
+- input and output paths;
+- row counts;
+- elapsed time;
+- outcome.
+
+### Execution reports
+
+A run report should contain:
+
+- parameters;
+- start and finish times;
+- stage outcomes;
+- created, skipped, and overwritten files;
+- raw, hourly, and daily counts;
+- validation result;
+- error details.
+
+### Failure semantics
+
+A failed run must:
+
+- return a non-zero exit status;
+- identify the failing stage;
+- preserve exception context;
+- avoid replacing a valid output with a partial file;
+- never produce a misleading success report.
+
+---
+
+## 12. Security architecture
+
+### Current controls
+
+- synthetic data only;
+- private S3 bucket;
+- S3 public access blocking;
+- project-scoped IAM permissions;
+- AWS named profile instead of root access;
+- `.env` excluded from Git;
+- no secrets in source code;
+- no generated data in Git.
+
+### Planned controls
+
+- MongoDB network restrictions;
+- separate application and administrative users;
+- environment-based or managed secrets;
+- API validation and rate limits;
+- least-privilege deployment roles;
+- dependency scanning;
+- safe logs without credentials.
+
+---
+
+## 13. Scalability considerations
+
+The current implementation favors clarity. It can evolve by:
+
+- replacing local files with S3;
+- replacing in-process transformations with Spark or Glue;
+- parallelizing independent hourly partitions;
+- compacting small files;
+- registering schemas in Glue;
+- querying with Athena;
+- using bulk writes for MongoDB;
+- introducing incremental profile updates when history becomes large.
+
+Layer boundaries and data contracts should remain stable even when execution technology changes.
+
+---
+
+## 14. Reliability considerations
+
+- Validate required inputs and columns.
+- Reject duplicate aggregate keys.
+- Validate timestamps and partitions.
+- Protect existing outputs through rerun modes.
+- Publish current profiles atomically.
+- Test first run, skip, overwrite, and failure cases.
+- Preserve raw data for replay.
+
+---
+
+## 15. Deployment evolution
+
+### Stage 1 — Local batch platform
+
+Generator, local storage, Python orchestration, tests, logs, and reports.
+
+### Stage 2 — Cloud object storage
+
+S3 upload, environment configuration, and least-privilege IAM.
+
+### Stage 3 — Operational serving
+
+Current profiles, MongoDB Atlas, FastAPI, and dashboard.
+
+### Stage 4 — Cloud analytics
+
+Glue Data Catalog, Athena, analytical examples, and optional Snowflake evaluation.
+
+### Stage 5 — Managed execution
+
+Containers, scheduling, centralized logs, CI/CD, infrastructure as code, and optional streaming.
+
+---
+
+## 16. Architectural boundaries
+
+- Generation does not upload directly to S3.
+- Storage code does not implement business aggregation.
+- Analytics code does not contain credentials.
+- API code does not read raw files.
+- Dashboard code does not connect directly to MongoDB.
+- MongoDB does not replace Parquet history.
+- The orchestrator coordinates but does not duplicate transformations.
+- Configuration modules do not perform pipeline work.
+
+---
+
+## 17. Related documentation
+
+- [Data model](DATA_MODEL.md)
+- [Pipeline](PIPELINE.md)
+- [Architecture decisions](DECISIONS.md)
+- [Roadmap](ROADMAP.md)
+- [Contributing](CONTRIBUTING.md)
