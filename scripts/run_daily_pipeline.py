@@ -2,6 +2,9 @@ import argparse
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+from dataclasses import dataclass
+import shutil
+
 import pandas as pd
 
 from analytics.subscriber_profiles import (
@@ -19,6 +22,63 @@ from main import (
     save_events_to_jsonl,
 )
 
+@dataclass(frozen=True)
+class HourlyPipelinePaths:
+    raw_file: Path
+    enriched_file: Path
+    hourly_file: Path
+
+    @property
+    def existing_paths(self) -> list[Path]:
+        return [
+            path
+            for path in (
+                self.raw_file,
+                self.enriched_file,
+                self.hourly_file,
+            )
+            if path.exists()
+        ]
+
+def build_hourly_pipeline_paths(
+    processing_time: datetime,
+) -> HourlyPipelinePaths:
+    timestamp = processing_time.strftime(
+        "%Y%m%d_%H0000"
+    )
+
+    partition = (
+        f"year={processing_time.year:04d}"
+        f"/month={processing_time.month:02d}"
+        f"/day={processing_time.day:02d}"
+        f"/hour={processing_time.hour:02d}"
+    )
+
+    raw_file = (
+        Path("data/raw")
+        / partition
+        / f"subscriber_events_{timestamp}.jsonl"
+    )
+
+    enriched_file = (
+        Path("data/enriched")
+        / partition
+        / f"enriched_subscriber_events_{timestamp}.parquet"
+    )
+
+    hourly_file = (
+        Path(
+            "data/curated/subscriber_activity_hourly"
+        )
+        / partition
+        / "subscriber_activity_hourly.parquet"
+    )
+
+    return HourlyPipelinePaths(
+        raw_file=raw_file,
+        enriched_file=enriched_file,
+        hourly_file=hourly_file,
+    )
 
 def parse_date(value: str) -> date:
     """
@@ -85,6 +145,26 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Number of events to generate per hour.",
     )
 
+    processing_mode = parser.add_mutually_exclusive_group()
+
+    processing_mode.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help=(
+            "Skip hours whose raw, enriched or hourly "
+            "outputs already exist."
+        ),
+    )
+
+    processing_mode.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Delete existing outputs for the requested "
+            "hours before processing them again."
+        ),
+    )
+
     return parser
 
 
@@ -144,17 +224,115 @@ def build_hourly_day_partition(
         / f"day={processing_date.day:02d}"
     )
 
+def prepare_hour_for_processing(
+    paths: HourlyPipelinePaths,
+    skip_existing: bool,
+    overwrite: bool,
+) -> bool:
+    existing_paths = paths.existing_paths
+
+    if not existing_paths:
+        return True
+
+    if skip_existing:
+        print(
+            "Existing outputs detected. "
+            "Skipping this hour:"
+        )
+
+        for path in existing_paths:
+            print(f"  - {path}")
+
+        return False
+
+    if overwrite:
+        print(
+            "Existing outputs detected. "
+            "Removing them before reprocessing:"
+        )
+
+        for path in existing_paths:
+            print(f"  - {path}")
+            path.unlink()
+
+        remove_empty_parent_directories(
+            paths=existing_paths
+        )
+
+        return True
+
+    existing_outputs = "\n".join(
+        f"  - {path}"
+        for path in existing_paths
+    )
+
+    raise FileExistsError(
+        "Pipeline outputs already exist for the "
+        "requested hour.\n"
+        f"{existing_outputs}\n"
+        "Use --skip-existing to keep them or "
+        "--overwrite to rebuild them."
+    )
+
+def remove_empty_parent_directories(
+    paths: list[Path],
+) -> None:
+    data_directory = Path("data").resolve()
+
+    for path in paths:
+        parent = path.parent
+
+        while parent.exists():
+            resolved_parent = parent.resolve()
+
+            if resolved_parent == data_directory:
+                break
+
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+
+            parent = parent.parent
 
 def validate_pipeline_counts(
-    raw_event_count: int,
+    processing_date: date,
     hourly_day_partition: Path,
     daily_output_file: Path,
 ) -> None:
+    raw_day_partition = (
+        Path("data/raw")
+        / f"year={processing_date.year:04d}"
+        / f"month={processing_date.month:02d}"
+        / f"day={processing_date.day:02d}"
+    )
+
+    raw_files = sorted(
+        raw_day_partition.glob("hour=*/*.jsonl")
+    )
+
+    if not raw_files:
+        raise FileNotFoundError(
+            f"No raw JSONL files found in: "
+            f"{raw_day_partition}"
+        )
+
+    raw_event_count = sum(
+        count_jsonl_records(raw_file)
+        for raw_file in raw_files
+    )
+
     hourly_files = sorted(
         hourly_day_partition.glob(
             "hour=*/subscriber_activity_hourly.parquet"
         )
     )
+
+    if not hourly_files:
+        raise FileNotFoundError(
+            f"No hourly Parquet files found in: "
+            f"{hourly_day_partition}"
+        )
 
     hourly_event_count = sum(
         int(
@@ -178,9 +356,9 @@ def validate_pipeline_counts(
     print()
     print("Pipeline validation")
     print("-------------------")
-    print(f"Generated events: {raw_event_count}")
-    print(f"Hourly events:    {hourly_event_count}")
-    print(f"Daily events:     {daily_event_count}")
+    print(f"Raw events:     {raw_event_count}")
+    print(f"Hourly events:  {hourly_event_count}")
+    print(f"Daily events:   {daily_event_count}")
 
     if not (
         raw_event_count
@@ -189,20 +367,34 @@ def validate_pipeline_counts(
     ):
         raise RuntimeError(
             "Pipeline count validation failed: "
-            "generated, hourly and daily event counts "
+            "raw, hourly and daily event counts "
             "do not match."
         )
 
     print("Validation result: PASSED")
 
+def count_jsonl_records(file_path: Path) -> int:
+    """
+    Count non-empty records in a JSONL file.
+    """
+    with file_path.open(
+        mode="r",
+        encoding="utf-8",
+    ) as input_file:
+        return sum(
+            1
+            for line in input_file
+            if line.strip()
+        )
 
 def run_daily_pipeline(
     processing_date: date,
     hours: list[int],
     events_per_hour: int,
+    skip_existing: bool = False,
+    overwrite: bool = False,
 ) -> Path:
-    generated_event_count = 0
-
+    
     print(
         f"Starting pipeline for {processing_date.isoformat()}"
     )
@@ -217,6 +409,20 @@ def run_daily_pipeline(
             processing_date,
             hour,
         )
+
+        paths = build_hourly_pipeline_paths(
+            processing_time
+        )
+
+        should_process = prepare_hour_for_processing(
+            paths=paths,
+            skip_existing=skip_existing,
+            overwrite=overwrite,
+        )
+
+        if not should_process:
+            print()
+            continue
 
         print(
             f"[{hour:02d}:00] Generating raw events..."
@@ -235,8 +441,6 @@ def run_daily_pipeline(
             events,
             raw_output_file,
         )
-
-        generated_event_count += len(events)
 
         print(
             f"[{hour:02d}:00] Raw file: "
@@ -291,7 +495,7 @@ def run_daily_pipeline(
     print(f"Daily file: {daily_output_file}")
 
     validate_pipeline_counts(
-        raw_event_count=generated_event_count,
+        processing_date=processing_date,
         hourly_day_partition=hourly_day_partition,
         daily_output_file=daily_output_file,
     )
@@ -312,6 +516,8 @@ def main() -> None:
         processing_date=args.date,
         hours=hours,
         events_per_hour=args.events_per_hour,
+        skip_existing=args.skip_existing,
+        overwrite=args.overwrite,
     )
 
 
