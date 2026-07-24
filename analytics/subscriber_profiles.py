@@ -79,6 +79,40 @@ HOURLY_REQUIRED_COLUMNS = {
     "window_end",
 }
 
+DAILY_REQUIRED_COLUMNS = {
+    "subscriber_id",
+    "imsi",
+    "msisdn",
+    "customer_segment",
+    "subscriber_status",
+    "plan_id",
+    "plan_name",
+    "plan_type",
+    "monthly_data_allowance_gb",
+    "max_download_mbps",
+    "max_upload_mbps",
+    "technology_access",
+    "latest_tac",
+    "latest_device_vendor",
+    "latest_device_model",
+    "latest_device_os",
+    "latest_device_technology",
+    "latest_cell_id",
+    "latest_city",
+    "latest_state",
+    "latest_network_technology",
+    "event_count",
+    "total_bytes_dl",
+    "total_bytes_ul",
+    "total_bytes",
+    "latency_sum",
+    "latency_sample_count",
+    "packet_loss_sum",
+    "packet_loss_sample_count",
+    "window_start",
+    "window_end",
+}
+
 def validate_required_columns(dataframe: pd.DataFrame) -> None:
     missing_columns = REQUIRED_COLUMNS - set(dataframe.columns)
 
@@ -88,6 +122,52 @@ def validate_required_columns(dataframe: pd.DataFrame) -> None:
             f"Missing required enriched columns: {missing}"
         )
 
+def validate_daily_required_columns(
+    dataframe: pd.DataFrame,
+) -> None:
+    missing_columns = DAILY_REQUIRED_COLUMNS - set(
+        dataframe.columns
+    )
+
+    if missing_columns:
+        missing = ", ".join(sorted(missing_columns))
+        raise CuratedDatasetError(
+            f"Missing required daily columns: {missing}"
+        )
+
+def discover_daily_activity_files(
+    daily_activity_directory: Path,
+) -> list[Path]:
+    daily_activity_directory = Path(
+        daily_activity_directory
+    )
+
+    if not daily_activity_directory.exists():
+        raise FileNotFoundError(
+            "Daily activity directory not found: "
+            f"{daily_activity_directory}"
+        )
+
+    if not daily_activity_directory.is_dir():
+        raise NotADirectoryError(
+            "Expected a daily activity directory: "
+            f"{daily_activity_directory}"
+        )
+
+    input_files = sorted(
+        daily_activity_directory.glob(
+            "year=*/month=*/day=*/"
+            "subscriber_activity_daily.parquet"
+        )
+    )
+
+    if not input_files:
+        raise FileNotFoundError(
+            "No daily subscriber activity files found in: "
+            f"{daily_activity_directory}"
+        )
+
+    return input_files
 
 def build_hourly_output_path(
     enriched_partition: Path,
@@ -660,3 +740,109 @@ def build_daily_subscriber_activity(
     )
 
     return output_file
+
+def load_daily_activity_history(
+    input_files: list[Path],
+) -> pd.DataFrame:
+    if not input_files:
+        raise CuratedDatasetError(
+            "No daily activity files were provided."
+        )
+
+    dataframes = [
+        pd.read_parquet(Path(input_file))
+        for input_file in input_files
+    ]
+
+    dataframe = pd.concat(
+        dataframes,
+        ignore_index=True,
+    )
+
+    if dataframe.empty:
+        raise CuratedDatasetError(
+            "No daily subscriber activity records were found."
+        )
+
+    validate_daily_required_columns(dataframe)
+
+    return dataframe
+
+def validate_daily_timestamps(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    validated_dataframe = dataframe.copy()
+
+    validated_dataframe["window_start"] = pd.to_datetime(
+        validated_dataframe["window_start"],
+        utc=True,
+        errors="coerce",
+    )
+
+    validated_dataframe["window_end"] = pd.to_datetime(
+        validated_dataframe["window_end"],
+        utc=True,
+        errors="coerce",
+    )
+
+    if validated_dataframe["window_start"].isna().any():
+        raise CuratedDatasetError(
+            "Invalid window_start values were found in the "
+            "daily activity history."
+        )
+
+    if validated_dataframe["window_end"].isna().any():
+        raise CuratedDatasetError(
+            "Invalid window_end values were found in the "
+            "daily activity history."
+        )
+
+    invalid_windows = (
+        validated_dataframe["window_end"]
+        <= validated_dataframe["window_start"]
+    )
+
+    if invalid_windows.any():
+        raise CuratedDatasetError(
+            "Daily activity windows must end after they start."
+        )
+
+    return validated_dataframe
+
+def validate_unique_daily_windows(
+    dataframe: pd.DataFrame,
+) -> None:
+    duplicate_mask = dataframe.duplicated(
+        subset=[
+            "subscriber_id",
+            "window_start",
+            "window_end",
+        ],
+        keep=False,
+    )
+
+    if duplicate_mask.any():
+        raise CuratedDatasetError(
+            "Duplicate daily subscriber windows were found."
+        )
+
+def load_validated_daily_activity_history(
+    daily_activity_directory: Path,
+) -> pd.DataFrame:
+    input_files = discover_daily_activity_files(
+        daily_activity_directory
+    )
+
+    dataframe = load_daily_activity_history(
+        input_files
+    )
+
+    dataframe = validate_daily_timestamps(
+        dataframe
+    )
+
+    validate_unique_daily_windows(
+        dataframe
+    )
+
+    return dataframe

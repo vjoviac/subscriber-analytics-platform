@@ -96,6 +96,16 @@ DEFAULT_EVENT_COUNT = get_positive_integer(
     default=500,
 )
 
+SUBSCRIBER_PROFILES_CURRENT_DIRECTORY = Path(
+    os.getenv(
+        "SUBSCRIBER_PROFILES_CURRENT_DIRECTORY",
+        str(
+            CURATED_DATA_DIRECTORY
+            / "subscriber_profiles_current"
+        ),
+    )
+)
+
 LOG_LEVEL = os.getenv(
     "LOG_LEVEL",
     "INFO",
