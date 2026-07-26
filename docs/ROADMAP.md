@@ -56,6 +56,8 @@ Enriched Parquet
 Hourly Curated Parquet
     ↓
 Daily Curated Parquet
+    ↓
+Current Subscriber Profiles
 ```
 
 Operational capabilities:
@@ -67,9 +69,11 @@ Operational capabilities:
 - validation;
 - safe rerun modes;
 - unit tests;
-- S3 upload integration.
+- S3 upload integration;
+- current-profile validation and reconciliation;
+- atomic current-profile publication.
 
-The active development line remains `v0.2.x` until the next agreed architectural milestone is completed and tagged.
+The current release is `v0.2.3`. The next milestone is MongoDB Atlas synchronization.
 
 ---
 
@@ -106,9 +110,9 @@ Capabilities associated with the release line include:
 
 The exact scope of `v0.2.0` is the commit referenced by that tag. The tag must not be moved.
 
-### v0.2.x — Reliability, orchestration, and observability
+### v0.2.2 — Reliability, orchestration, and observability
 
-**Status:** Current
+**Status:** Existing tag
 
 Capabilities:
 
@@ -129,64 +133,84 @@ Exit criteria:
 - work is committed;
 - a patch tag may be created at a stable checkpoint.
 
-Potential tag:
+### v0.2.3 — Current subscriber profiles
 
-```text
-v0.2.1
-```
+**Status:** Existing tag
 
-Only create it if it does not already exist.
+Capabilities:
+
+- discovery and validation of all daily activity files;
+- required-column and timestamp contracts;
+- duplicate daily-window rejection;
+- deterministic latest-state selection;
+- historical coverage and lifetime usage metrics;
+- weighted lifetime quality metrics with null zero-sample averages;
+- `profile_version` and UTC `profile_updated_at`;
+- one row per subscriber;
+- daily-to-profile reconciliation;
+- independent command-line rebuild;
+- atomic Parquet publication;
+- daily-pipeline orchestration and execution-report integration.
+
+Exit criteria:
+
+- all automated tests pass;
+- standalone and orchestrated builds succeed;
+- repeated builds replace the snapshot safely;
+- documentation reflects actual behavior;
+- release is tagged as `v0.2.3`.
 
 ---
 
-## 5. Next milestone — Current subscriber profiles
+## 5. Next milestone — MongoDB Atlas
 
 ### Objective
 
-Create a stable current-state subscriber data product from daily activity history.
+Synchronize the current subscriber profile snapshot to MongoDB Atlas as the operational serving store.
 
-### Deliverables
-
-- `SUBSCRIBER_PROFILES_CURRENT_DIRECTORY` setting;
-- daily required-column contract;
-- daily file discovery;
-- timestamp validation;
-- duplicate daily-window detection;
-- current-profile builder;
-- latest dimensional state;
-- lifetime traffic metrics;
-- weighted lifetime quality metrics;
-- `profile_version`;
-- `profile_updated_at`;
-- subscriber uniqueness validation;
-- atomic Parquet publication;
-- unit tests;
-- standalone manual validation;
-- documentation updates.
-
-### Output
+### Input
 
 ```text
 data/curated/subscriber_profiles_current/
 └── subscriber_profiles_current.parquet
 ```
 
+### Deliverables
+
+- connect through environment-based credentials;
+- upsert by `subscriber_id`;
+- use bulk operations;
+- report inserted, matched, modified, and failed counts;
+- preserve version and update timestamps;
+- avoid deleting unobserved profiles by default;
+- make full replacement explicit.
+
+Repeated synchronization of the same snapshot must not create duplicates.
+
+### Output
+
+```text
+MongoDB Atlas
+└── subscriber_profiles collection
+```
+
 ### Non-goals
 
-- MongoDB synchronization;
 - FastAPI;
 - dashboard;
 - top application;
-- incremental profile updates.
+- historical Parquet replacement;
+- incremental profile computation.
 
 ### Exit criteria
 
-- one row per subscriber;
-- metrics reconcile with daily inputs;
-- latest state is deterministic;
-- zero-sample averages are null;
-- output is atomic;
-- tests cover empty input, duplicates, schema errors, and repeated builds.
+- secure environment-based connectivity;
+- a unique subscriber key prevents duplicates;
+- bulk upserts are idempotent;
+- repeated synchronization does not create additional documents;
+- synchronization reports inserted, matched, modified, and failed counts;
+- existing profiles are not deleted implicitly;
+- unit and explicitly marked integration tests pass.
 
 ---
 

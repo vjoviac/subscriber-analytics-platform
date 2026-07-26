@@ -27,15 +27,17 @@ Build daily subscriber activity
           ↓
 Validate raw, hourly, and daily counts
           ↓
+Build and validate current subscriber profiles
+          ↓
+Atomically publish the current-profile snapshot
+          ↓
 Write structured execution report
 ```
 
 Planned extension:
 
 ```text
-Daily subscriber activity
-          ↓
-Build current subscriber profiles
+Current subscriber profiles
           ↓
 Synchronize MongoDB Atlas
           ↓
@@ -65,9 +67,9 @@ Expected arguments:
 Example:
 
 ```bash
-python scripts/run_daily_pipeline.py \
+python -m scripts.run_daily_pipeline \
   --date 2026-07-22 \
-  --hours 0,1,2,3,4,5 \
+  --hours 0 1 2 3 4 5 \
   --events-per-hour 1000
 ```
 
@@ -341,7 +343,7 @@ The run succeeds only when mandatory validation passes.
 
 ---
 
-## 11. Planned stage — Current subscriber profiles
+## 11. Stage 7 — Current subscriber profiles
 
 ### Input
 
@@ -373,7 +375,15 @@ data/curated/subscriber_profiles_current/
 13. Write a temporary file.
 14. Atomically replace the final snapshot.
 
-The builder should work independently before orchestration integration.
+The builder works independently and is also integrated into the daily orchestrator after raw-hourly-daily reconciliation. A failed profile build prevents the run from being reported as successful and does not replace a previously valid snapshot.
+
+Standalone rebuild:
+
+```bash
+python -m scripts.run_current_profiles
+```
+
+The standalone command uses `DAILY_ACTIVITY_DIRECTORY` and `SUBSCRIBER_PROFILES_CURRENT_DIRECTORY` from centralized configuration.
 
 ---
 
@@ -584,6 +594,10 @@ This is especially important for current-profile snapshots.
 - weighted averages;
 - duplicate detection;
 - profile construction;
+- zero-sample lifetime averages;
+- daily-to-profile reconciliation;
+- atomic snapshot replacement and failure preservation;
+- repeated profile builds;
 - report serialization.
 
 ### Integration tests
@@ -658,8 +672,10 @@ Before a run:
 After a run:
 
 - process exited successfully;
-- report status is `SUCCESS`;
+- report status is `SUCCEEDED`;
 - counts reconcile;
+- current-profile count matches unique subscriber count;
+- current-profile snapshot exists;
 - skipped stages are expected;
 - partitions exist;
 - tests still pass after code changes.

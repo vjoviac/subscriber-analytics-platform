@@ -4,9 +4,9 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
-> **Current release line:** `v0.2.x`  
-> **Current focus:** reliable batch processing across raw, enriched, hourly curated, and daily curated layers.  
-> **Next platform milestone:** current subscriber profiles, MongoDB Atlas, FastAPI, and a dashboard.
+> **Current release:** `v0.2.3`  
+> **Current focus:** a reliable batch pipeline through the atomic current subscriber profile snapshot.  
+> **Next platform milestone:** MongoDB Atlas synchronization.
 
 ---
 
@@ -49,10 +49,13 @@ The project evolves in stages so that each architectural capability can be imple
 - Pipeline reconciliation and validation.
 - Unit tests.
 - Amazon S3 upload support using an AWS CLI named profile.
+- Current subscriber profile snapshot.
+- Deterministic latest-state and lifetime-metric construction.
+- Atomic current-profile publication.
+- Current-profile integration with the daily pipeline and execution report.
 
 ### Planned
 
-- Current subscriber profile snapshot.
 - MongoDB Atlas serving layer.
 - FastAPI service.
 - Dashboard consuming the API.
@@ -135,6 +138,7 @@ subscriber-analytics-platform/
 ├── ingestion/
 │   └── s3_loader.py
 ├── scripts/
+│   ├── run_current_profiles.py
 │   └── run_daily_pipeline.py
 ├── storage/
 │   └── storage_manager.py
@@ -303,7 +307,7 @@ Existing Git tags are immutable and are never reused.
 
 ## Project status
 
-The `v0.2.x` line represents the reliable batch pipeline foundation:
+Release `v0.2.3` represents the reliable batch pipeline foundation:
 
 ```text
 Raw JSONL
@@ -313,13 +317,13 @@ Enriched Parquet
 Hourly Curated Parquet
     ↓
 Daily Curated Parquet
+    ↓
+Current Subscriber Profiles
 ```
 
 The next architectural milestone extends the platform into a serving system:
 
 ```text
-Daily Curated Parquet
-    ↓
 Current Subscriber Profiles
     ↓
 MongoDB Atlas

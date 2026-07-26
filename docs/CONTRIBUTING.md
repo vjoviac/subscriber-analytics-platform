@@ -121,7 +121,7 @@ Business transformations and curated datasets.
 
 ### `scripts/`
 
-Command-line orchestration.
+Command-line orchestration and standalone data-product rebuilds.
 
 ### `config/`
 
@@ -274,6 +274,16 @@ A new feature should test:
 - reconciliation.
 
 Tests must not depend on developer-specific data, existing outputs, a particular AWS account, test order, or internet access unless explicitly marked.
+
+### Manual current-profile validation
+
+After automated tests pass, rebuild the current-profile snapshot with:
+
+```bash
+python -m scripts.run_current_profiles
+```
+
+Confirm that the output contains exactly one row per `subscriber_id`, no duplicate subscriber keys, valid UTC metadata, and no temporary publication artifact.
 
 ---
 

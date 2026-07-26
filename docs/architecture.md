@@ -109,7 +109,11 @@ Hourly Subscriber Activity
       ↓
 Daily Subscriber Activity
       ↓
-Validation
+Raw / Hourly / Daily Validation
+      ↓
+Build and Validate Current Subscriber Profiles
+      ↓
+Atomic Snapshot Publication
 
 Cross-cutting capabilities:
 - centralized configuration;
@@ -117,7 +121,8 @@ Cross-cutting capabilities:
 - execution reports;
 - rerun controls;
 - unit tests;
-- S3 upload support.
+- S3 upload support;
+- atomic snapshot publication.
 ```
 
 ---
@@ -244,7 +249,7 @@ Responsibilities:
 
 **Dataset:** `subscriber_profiles_current`
 
-Expected path:
+Path:
 
 ```text
 data/curated/subscriber_profiles_current/
@@ -262,6 +267,8 @@ Responsibilities:
 - provide MongoDB synchronization input.
 
 The snapshot is not date-partitioned because it represents current state.
+
+The implementation discovers the complete daily history, validates its contract and timestamps, rejects duplicate subscriber windows, selects the latest state deterministically, calculates lifetime metrics, reconciles the result, and publishes the snapshot atomically. It can run independently or as the final data-product stage of the daily orchestrator.
 
 ### 6.8 MongoDB Atlas
 
@@ -396,7 +403,9 @@ For each requested hour:
 
 After all requested hours:
     aggregate daily
-    validate
+    validate raw, hourly, and daily counts
+    build and validate current profiles
+    atomically publish the current-profile snapshot
     publish execution report
 ```
 
@@ -446,6 +455,7 @@ A run report should contain:
 - stage outcomes;
 - created, skipped, and overwritten files;
 - raw, hourly, and daily counts;
+- current-profile output path and subscriber count;
 - validation result;
 - error details.
 
@@ -527,7 +537,7 @@ S3 upload, environment configuration, and least-privilege IAM.
 
 ### Stage 3 — Operational serving
 
-Current profiles, MongoDB Atlas, FastAPI, and dashboard.
+MongoDB Atlas, FastAPI, and dashboard, using the completed current-profile snapshot as input.
 
 ### Stage 4 — Cloud analytics
 

@@ -9,12 +9,12 @@
 
 | Item | Value |
 |------|-------|
-| Current Version | v0.2.x |
-| Current Git Tag | v0.2.2 |
+| Current Version | v0.2.3 |
+| Current Git Tag | v0.2.3 |
 | Primary Branch | main |
-| Current Milestone | subscriber_profiles_current |
-| Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily |
-| Next Deliverable | subscriber_profiles_current.parquet |
+| Current Milestone | MongoDB Atlas |
+| Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles |
+| Next Deliverable | MongoDB Atlas integration |
 | Planned Serving Layer | MongoDB Atlas → FastAPI → Dashboard |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
@@ -27,7 +27,7 @@
 
 The Subscriber Analytics Platform is a portfolio project that simulates a production-grade telecommunications analytics platform. The objective is to demonstrate sound engineering and architectural practices rather than simply producing code.
 
-Current version: **v0.2.x**
+Current version: **v0.2.3**
 
 ---
 
@@ -46,18 +46,21 @@ Current version: **v0.2.x**
 - Execution reports
 - Centralized configuration
 - Unit tests
+- Current subscriber profile snapshot
+- Deterministic latest-state selection
+- Lifetime usage and weighted quality metrics
+- Atomic snapshot publication
+- Current-profile orchestration integration
 
 ## Current milestone
 
-**subscriber_profiles_current**
+**MongoDB Atlas**
 
 ## Planned milestones
 
-1. subscriber_profiles_current
-2. MongoDB Atlas
-3. FastAPI
-4. Dashboard
-5. AWS Glue / Athena
+1. FastAPI
+2. Dashboard
+3. AWS Glue / Athena
 
 ---
 
@@ -89,7 +92,7 @@ Curated Hourly
     ↓
 Curated Daily
     ↓
-Subscriber Profiles (planned)
+Current Subscriber Profiles
     ↓
 MongoDB Atlas
     ↓
@@ -177,7 +180,7 @@ Semantic Versioning:
 | ✅ | Enrichment |
 | ✅ | Hourly Aggregation |
 | ✅ | Daily Aggregation |
-| ⏳ | subscriber_profiles_current |
+| ✅ | subscriber_profiles_current |
 | ⏳ | MongoDB Atlas |
 | ⏳ | FastAPI |
 | ⏳ | Dashboard |
@@ -187,24 +190,27 @@ Semantic Versioning:
 
 # 9. Next Milestone
 
-Goal: **subscriber_profiles_current**
+Goal: **MongoDB Atlas**
 
 Input:
 
-- subscriber_activity_daily
+- subscriber_profiles_current.parquet
 
 Output:
 
-- subscriber_profiles_current.parquet
+- MongoDB Atlas collection
 
 Requirements:
 
-- One row per subscriber
-- Latest dimensional attributes
-- Lifetime metrics
-- Atomic write
-- Integration into orchestration
-- Validation
+- connect through environment-based credentials;
+- upsert by `subscriber_id`;
+- use bulk operations;
+- report inserted, matched, modified, and failed counts;
+- preserve version and update timestamps;
+- avoid deleting unobserved profiles by default;
+- make full replacement explicit.
+
+Repeated synchronization of the same snapshot must not create duplicates.
 
 ---
 

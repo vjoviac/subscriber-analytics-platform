@@ -1,4 +1,4 @@
-# Subscriber Analytics Platform — Data Model
+# Subscriber Analytics Platform â€” Data Model
 
 ## 1. Purpose
 
@@ -350,7 +350,9 @@ subscriber_id
 
 Combine the latest known state with historical activity and quality metrics.
 
-### Proposed schema
+### Implemented schema
+
+The Parquet snapshot contains 29 columns organized into the groups below.
 
 #### Identity
 
@@ -380,6 +382,8 @@ Combine the latest known state with historical activity and quality metrics.
 | `city` | string | Latest city |
 | `state` | string or null | Latest state |
 | `country` | string or null | Latest country |
+
+`country` is currently published as null because the daily activity dataset does not yet provide that attribute. The field is retained as an explicit optional part of the profile contract.
 
 #### Historical coverage
 
@@ -606,7 +610,11 @@ profile_version
 
 - one row per subscriber;
 - deterministic latest state;
+- valid UTC activity and profile timestamps;
+- non-negative lifetime counters;
+- at least one active day;
 - lifetime metrics equal daily sums;
+- zero-sample lifetime averages are null;
 - no fabricated top application;
 - atomic publication.
 

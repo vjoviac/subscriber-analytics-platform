@@ -1,4 +1,4 @@
-# Subscriber Analytics Platform — Architecture Decisions
+# Subscriber Analytics Platform â€” Architecture Decisions
 
 ## 1. Purpose
 
@@ -15,7 +15,7 @@ Status values:
 
 ---
 
-## ADR-001 — Use a layered data architecture
+## ADR-001 â€” Use a layered data architecture
 
 **Status:** Accepted
 
@@ -29,12 +29,12 @@ Use explicit layers:
 
 ```text
 Raw
-→ Enriched
-→ Curated
-→ Current Profiles
-→ Serving
-→ API
-→ Dashboard
+â†’ Enriched
+â†’ Curated
+â†’ Current Profiles
+â†’ Serving
+â†’ API
+â†’ Dashboard
 ```
 
 ### Rationale
@@ -52,7 +52,7 @@ Raw
 
 ---
 
-## ADR-002 — Store raw events as JSON Lines
+## ADR-002 â€” Store raw events as JSON Lines
 
 **Status:** Accepted
 
@@ -74,7 +74,7 @@ Store one JSON object per line in `.jsonl` files.
 
 ---
 
-## ADR-003 — Use Parquet from the enriched layer onward
+## ADR-003 â€” Use Parquet from the enriched layer onward
 
 **Status:** Accepted
 
@@ -96,7 +96,7 @@ Write enriched and curated datasets as Parquet.
 
 ---
 
-## ADR-004 — Partition by UTC processing time
+## ADR-004 â€” Partition by UTC processing time
 
 **Status:** Accepted
 
@@ -124,7 +124,7 @@ for hourly layers and omit `hour` for daily data.
 
 ---
 
-## ADR-005 — Keep raw data immutable
+## ADR-005 â€” Keep raw data immutable
 
 **Status:** Accepted
 
@@ -145,7 +145,7 @@ Raw data is preserved as the replay source. Corrections rebuild downstream layer
 
 ---
 
-## ADR-006 — Use a canonical subscriber identifier
+## ADR-006 â€” Use a canonical subscriber identifier
 
 **Status:** Accepted
 
@@ -166,7 +166,7 @@ Use `subscriber_id`, initially derived from synthetic IMSI, as the aggregation a
 
 ---
 
-## ADR-007 — Model device capability as the maximum supported generation
+## ADR-007 â€” Model device capability as the maximum supported generation
 
 **Status:** Accepted
 
@@ -187,7 +187,7 @@ Store one `device_capability` value representing the highest supported generatio
 
 ---
 
-## ADR-008 — Separate generation, storage, enrichment, analytics, and orchestration
+## ADR-008 â€” Separate generation, storage, enrichment, analytics, and orchestration
 
 **Status:** Accepted
 
@@ -209,7 +209,7 @@ Keep components in separate modules and make the orchestrator coordinate them.
 
 ---
 
-## ADR-009 — Centralize application settings
+## ADR-009 â€” Centralize application settings
 
 **Status:** Accepted
 
@@ -242,7 +242,7 @@ for AWS-specific configuration.
 
 ---
 
-## ADR-010 — Use explicit rerun modes
+## ADR-010 â€” Use explicit rerun modes
 
 **Status:** Accepted
 
@@ -270,7 +270,7 @@ OVERWRITE
 
 ---
 
-## ADR-011 — Reconcile actual counts across layers
+## ADR-011 â€” Reconcile actual counts across layers
 
 **Status:** Accepted
 
@@ -298,7 +298,7 @@ sum(daily event_count)
 
 ---
 
-## ADR-012 — Preserve sums and sample counts for quality metrics
+## ADR-012 â€” Preserve sums and sample counts for quality metrics
 
 **Status:** Accepted
 
@@ -319,9 +319,11 @@ Persist latency and packet-loss sums and sample counts, then recalculate average
 
 ---
 
-## ADR-013 — Use one current-profile row per subscriber
+## ADR-013 â€” Use one current-profile row per subscriber
 
 **Status:** Accepted
+
+**Implementation:** Completed in `v0.2.3`.
 
 ### Decision
 
@@ -340,9 +342,11 @@ Build `subscriber_profiles_current` with exactly one row per subscriber.
 
 ---
 
-## ADR-014 — Do not date-partition the current-profile snapshot
+## ADR-014 â€” Do not date-partition the current-profile snapshot
 
 **Status:** Accepted
+
+**Implementation:** Completed in `v0.2.3`.
 
 ### Decision
 
@@ -350,7 +354,7 @@ Publish one logical current snapshot:
 
 ```text
 data/curated/subscriber_profiles_current/
-└── subscriber_profiles_current.parquet
+â””â”€â”€ subscriber_profiles_current.parquet
 ```
 
 ### Rationale
@@ -366,9 +370,11 @@ data/curated/subscriber_profiles_current/
 
 ---
 
-## ADR-015 — Build current profiles from daily activity
+## ADR-015 â€” Build current profiles from daily activity
 
 **Status:** Accepted
+
+**Implementation:** Completed in `v0.2.3`.
 
 ### Decision
 
@@ -387,9 +393,11 @@ Read all daily activity partitions to build current profiles.
 
 ---
 
-## ADR-016 — Do not fabricate top application
+## ADR-016 â€” Do not fabricate top application
 
 **Status:** Accepted
+
+**Implementation:** Completed in `v0.2.3`.
 
 ### Decision
 
@@ -408,9 +416,11 @@ Exclude `top_application` from current profiles until a dedicated application-us
 
 ---
 
-## ADR-017 — Publish snapshots atomically
+## ADR-017 â€” Publish snapshots atomically
 
 **Status:** Accepted
+
+**Implementation:** Completed in `v0.2.3`.
 
 ### Decision
 
@@ -429,7 +439,7 @@ Write to a temporary file and replace the final snapshot only after validation.
 
 ---
 
-## ADR-018 — Implement MongoDB before Athena
+## ADR-018 â€” Implement MongoDB before Athena
 
 **Status:** Accepted
 
@@ -439,10 +449,10 @@ Use this order:
 
 ```text
 Current Profiles
-→ MongoDB Atlas
-→ FastAPI
-→ Dashboard
-→ Glue and Athena
+â†’ MongoDB Atlas
+â†’ FastAPI
+â†’ Dashboard
+â†’ Glue and Athena
 ```
 
 ### Rationale
@@ -458,7 +468,7 @@ Current Profiles
 
 ---
 
-## ADR-019 — Use MongoDB as a serving layer, not the historical system of record
+## ADR-019 â€” Use MongoDB as a serving layer, not the historical system of record
 
 **Status:** Accepted
 
@@ -479,7 +489,7 @@ Store current profiles in MongoDB and preserve historical layers in file-based s
 
 ---
 
-## ADR-020 — Require the dashboard to consume FastAPI
+## ADR-020 â€” Require the dashboard to consume FastAPI
 
 **Status:** Proposed
 
@@ -501,7 +511,7 @@ The dashboard will use API endpoints instead of connecting directly to MongoDB.
 
 ---
 
-## ADR-021 — Use AWS named profiles for local development
+## ADR-021 â€” Use AWS named profiles for local development
 
 **Status:** Accepted
 
@@ -522,7 +532,7 @@ Use AWS CLI named profiles and boto3 sessions rather than root or hard-coded cre
 
 ---
 
-## ADR-022 — Keep S3 private
+## ADR-022 â€” Keep S3 private
 
 **Status:** Accepted
 
@@ -543,7 +553,7 @@ Use private buckets with public access blocking and ACLs disabled.
 
 ---
 
-## ADR-023 — Use structured logs and execution reports
+## ADR-023 â€” Use structured logs and execution reports
 
 **Status:** Accepted
 
@@ -565,7 +575,7 @@ Use structured logging plus a run-level report.
 
 ---
 
-## ADR-024 — Keep the project locally executable
+## ADR-024 â€” Keep the project locally executable
 
 **Status:** Accepted
 
@@ -587,7 +597,7 @@ Maintain a local execution path while cloud services are introduced.
 
 ---
 
-## ADR-025 — Adopt semantic versioning without moving tags
+## ADR-025 â€” Adopt semantic versioning without moving tags
 
 **Status:** Accepted
 
@@ -608,7 +618,7 @@ Treat Git tags as immutable and increment patch or minor versions for later rele
 
 ---
 
-## ADR-026 — Delay managed orchestration until the application path exists
+## ADR-026 â€” Delay managed orchestration until the application path exists
 
 **Status:** Proposed
 

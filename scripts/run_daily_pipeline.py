@@ -9,27 +9,36 @@ from time import perf_counter
 import pandas as pd
 
 from analytics.subscriber_profiles import (
+    build_current_subscriber_profiles_snapshot,
     build_daily_subscriber_activity,
     build_hourly_subscriber_activity,
 )
+
 from config.settings import (
     DATA_DIRECTORY,
+    DAILY_ACTIVITY_DIRECTORY,
     DEFAULT_EVENT_COUNT,
     ENRICHED_DATA_DIRECTORY,
     HOURLY_ACTIVITY_DIRECTORY,
     RAW_DATA_DIRECTORY,
     REPORT_DIRECTORY,
+    SUBSCRIBER_PROFILES_CURRENT_DIRECTORY,
 )
+
 from enrichment.enrichment_processor import (
     process_raw_file,
 )
+
 from generators.event_generator import (
     generate_events,
 )
+
 from infrastructure.logging_config import (
     configure_logging,
 )
+
 from main import build_output_file
+
 from storage.storage_manager import (
     save_events_to_jsonl,
 )
@@ -83,6 +92,7 @@ class PipelineRunReport:
     raw_event_count: int = 0
     hourly_event_count: int = 0
     daily_event_count: int = 0
+    current_profile_count: int = 0
 
     raw_files: list[str] = field(
         default_factory=list
@@ -95,6 +105,7 @@ class PipelineRunReport:
     )
 
     daily_file: str | None = None
+    current_profile_file: str | None = None
     log_file: str | None = None
     report_file: str | None = None
 
@@ -714,6 +725,43 @@ def run_daily_pipeline(
         )
         report.daily_event_count = (
             validation_counts["daily_event_count"]
+        )
+
+        logger.info(
+            "stage=current_subscriber_profiles "
+            "status=started"
+        )
+
+        current_profile_file = (
+            build_current_subscriber_profiles_snapshot(
+                daily_activity_directory=(
+                    DAILY_ACTIVITY_DIRECTORY
+                ),
+                output_directory=(
+                    SUBSCRIBER_PROFILES_CURRENT_DIRECTORY
+                ),
+            )
+        )
+
+        current_profiles = pd.read_parquet(
+            current_profile_file,
+            columns=["subscriber_id"],
+        )
+
+        report.current_profile_file = str(
+            current_profile_file
+        )
+
+        report.current_profile_count = len(
+            current_profiles
+        )
+
+        logger.info(
+            "stage=current_subscriber_profiles "
+            "status=completed profiles=%d "
+            "output_file=%s",
+            report.current_profile_count,
+            current_profile_file,
         )
 
         report.validation_status = "PASSED"

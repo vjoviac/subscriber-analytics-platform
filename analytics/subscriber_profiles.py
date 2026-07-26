@@ -79,6 +79,16 @@ HOURLY_REQUIRED_COLUMNS = {
     "window_end",
 }
 
+CURRENT_PROFILE_VERSION = 1
+
+CURRENT_PROFILE_FILENAME = (
+    "subscriber_profiles_current.parquet"
+)
+
+CURRENT_PROFILE_TEMPORARY_FILENAME = (
+    "subscriber_profiles_current.temporary.parquet"
+)
+
 DAILY_REQUIRED_COLUMNS = {
     "subscriber_id",
     "imsi",
@@ -846,3 +856,544 @@ def load_validated_daily_activity_history(
     )
 
     return dataframe
+
+def build_latest_subscriber_state(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    latest_state = (
+        dataframe
+        .sort_values(
+            by=[
+                "subscriber_id",
+                "window_end",
+                "window_start",
+            ]
+        )
+        .drop_duplicates(
+            subset=["subscriber_id"],
+            keep="last",
+        )
+        [
+            [
+                "subscriber_id",
+                "imsi",
+                "msisdn",
+                "plan_name",
+                "latest_tac",
+                "latest_device_vendor",
+                "latest_device_model",
+                "latest_device_os",
+                "latest_device_technology",
+                "latest_network_technology",
+                "latest_cell_id",
+                "latest_city",
+                "latest_state",
+            ]
+        ]
+        .rename(
+            columns={
+                "plan_name": "plan",
+                "latest_tac": "tac",
+                "latest_device_vendor": "device_vendor",
+                "latest_device_model": "device_model",
+                "latest_device_os": "device_os",
+                "latest_device_technology": (
+                    "device_capability"
+                ),
+                "latest_network_technology": (
+                    "network_technology"
+                ),
+                "latest_cell_id": "cell_id",
+                "latest_city": "city",
+                "latest_state": "state",
+            }
+        )
+        .sort_values(
+            by="subscriber_id"
+        )
+        .reset_index(drop=True)
+    )
+
+    latest_state["country"] = pd.NA
+
+    return latest_state
+
+def build_latest_subscriber_state(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    latest_state = (
+        dataframe
+        .sort_values(
+            by=[
+                "subscriber_id",
+                "window_end",
+                "window_start",
+            ]
+        )
+        .drop_duplicates(
+            subset=["subscriber_id"],
+            keep="last",
+        )
+        [
+            [
+                "subscriber_id",
+                "imsi",
+                "msisdn",
+                "plan_name",
+                "latest_tac",
+                "latest_device_vendor",
+                "latest_device_model",
+                "latest_device_os",
+                "latest_device_technology",
+                "latest_network_technology",
+                "latest_cell_id",
+                "latest_city",
+                "latest_state",
+            ]
+        ]
+        .rename(
+            columns={
+                "plan_name": "plan",
+                "latest_tac": "tac",
+                "latest_device_vendor": "device_vendor",
+                "latest_device_model": "device_model",
+                "latest_device_os": "device_os",
+                "latest_device_technology": (
+                    "device_capability"
+                ),
+                "latest_network_technology": (
+                    "network_technology"
+                ),
+                "latest_cell_id": "cell_id",
+                "latest_city": "city",
+                "latest_state": "state",
+            }
+        )
+        .sort_values(
+            by="subscriber_id"
+        )
+        .reset_index(drop=True)
+    )
+
+    latest_state["country"] = pd.NA
+
+    return latest_state
+
+def build_subscriber_activity_coverage(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    activity_coverage = (
+        dataframe
+        .groupby(
+            "subscriber_id",
+            as_index=False,
+        )
+        .agg(
+            first_activity_at=(
+                "window_start",
+                "min",
+            ),
+            last_activity_at=(
+                "window_end",
+                "max",
+            ),
+            active_day_count=(
+                "window_start",
+                "count",
+            ),
+        )
+        .sort_values(
+            by="subscriber_id"
+        )
+        .reset_index(drop=True)
+    )
+
+    return activity_coverage
+
+def build_subscriber_lifetime_metrics(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    lifetime_metrics = (
+        dataframe
+        .groupby(
+            "subscriber_id",
+            as_index=False,
+        )
+        .agg(
+            lifetime_event_count=(
+                "event_count",
+                "sum",
+            ),
+            lifetime_total_bytes_dl=(
+                "total_bytes_dl",
+                "sum",
+            ),
+            lifetime_total_bytes_ul=(
+                "total_bytes_ul",
+                "sum",
+            ),
+            lifetime_total_bytes=(
+                "total_bytes",
+                "sum",
+            ),
+            lifetime_latency_sum=(
+                "latency_sum",
+                "sum",
+            ),
+            lifetime_latency_sample_count=(
+                "latency_sample_count",
+                "sum",
+            ),
+            lifetime_packet_loss_sum=(
+                "packet_loss_sum",
+                "sum",
+            ),
+            lifetime_packet_loss_sample_count=(
+                "packet_loss_sample_count",
+                "sum",
+            ),
+        )
+    )
+
+    latency_sample_counts = lifetime_metrics[
+        "lifetime_latency_sample_count"
+    ].astype("float64").replace(
+        0,
+        float("nan"),
+    )
+
+    packet_loss_sample_counts = lifetime_metrics[
+        "lifetime_packet_loss_sample_count"
+    ].astype("float64").replace(
+        0,
+        float("nan"),
+    )
+
+    lifetime_metrics["lifetime_avg_latency_ms"] = (
+        lifetime_metrics["lifetime_latency_sum"]
+        .div(latency_sample_counts)
+        .round(2)
+    )
+
+    lifetime_metrics[
+        "lifetime_avg_packet_loss_pct"
+    ] = (
+        lifetime_metrics["lifetime_packet_loss_sum"]
+        .div(packet_loss_sample_counts)
+        .round(4)
+    )
+
+    lifetime_metrics = lifetime_metrics.sort_values(
+        by="subscriber_id"
+    ).reset_index(drop=True)
+
+    return lifetime_metrics
+
+def build_current_subscriber_profiles(
+    dataframe: pd.DataFrame,
+    profile_updated_at: datetime | None = None,
+) -> pd.DataFrame:
+    if profile_updated_at is None:
+        profile_updated_at = datetime.now(
+            timezone.utc
+        )
+
+    profile_timestamp = pd.Timestamp(
+        profile_updated_at
+    )
+
+    if profile_timestamp.tzinfo is None:
+        raise CuratedDatasetError(
+            "profile_updated_at must be timezone-aware."
+        )
+
+    profile_timestamp = profile_timestamp.tz_convert(
+        "UTC"
+    )
+
+    latest_state = build_latest_subscriber_state(
+        dataframe
+    )
+
+    activity_coverage = (
+        build_subscriber_activity_coverage(
+            dataframe
+        )
+    )
+
+    lifetime_metrics = (
+        build_subscriber_lifetime_metrics(
+            dataframe
+        )
+    )
+
+    profiles = (
+        latest_state
+        .merge(
+            activity_coverage,
+            on="subscriber_id",
+            how="inner",
+            validate="one_to_one",
+        )
+        .merge(
+            lifetime_metrics,
+            on="subscriber_id",
+            how="inner",
+            validate="one_to_one",
+        )
+    )
+
+    profiles["profile_version"] = (
+        CURRENT_PROFILE_VERSION
+    )
+
+    profiles["profile_updated_at"] = (
+        profile_timestamp
+    )
+
+    profiles = profiles.sort_values(
+        by="subscriber_id"
+    ).reset_index(drop=True)
+
+    return profiles
+
+def validate_current_subscriber_profiles(
+    profiles: pd.DataFrame,
+    daily_history: pd.DataFrame,
+) -> None:
+    if profiles.empty:
+        raise CuratedDatasetError(
+            "The current subscriber profile dataset is empty."
+        )
+
+    if profiles["subscriber_id"].duplicated().any():
+        raise CuratedDatasetError(
+            "Current subscriber profiles contain duplicate "
+            "subscriber IDs."
+        )
+
+    expected_subscribers = set(
+        daily_history["subscriber_id"]
+    )
+    actual_subscribers = set(
+        profiles["subscriber_id"]
+    )
+
+    if actual_subscribers != expected_subscribers:
+        raise CuratedDatasetError(
+            "Current subscriber profile IDs do not reconcile "
+            "with the daily activity history."
+        )
+
+    non_negative_columns = [
+        "active_day_count",
+        "lifetime_event_count",
+        "lifetime_total_bytes_dl",
+        "lifetime_total_bytes_ul",
+        "lifetime_total_bytes",
+        "lifetime_latency_sum",
+        "lifetime_latency_sample_count",
+        "lifetime_packet_loss_sum",
+        "lifetime_packet_loss_sample_count",
+    ]
+
+    if (
+        profiles[non_negative_columns]
+        .lt(0)
+        .any()
+        .any()
+    ):
+        raise CuratedDatasetError(
+            "Current subscriber profiles contain negative "
+            "lifetime metrics."
+        )
+
+    if (profiles["active_day_count"] < 1).any():
+        raise CuratedDatasetError(
+            "Current subscriber profiles must contain at "
+            "least one active day."
+        )
+
+    invalid_activity_range = (
+        profiles["first_activity_at"]
+        > profiles["last_activity_at"]
+    )
+
+    if invalid_activity_range.any():
+        raise CuratedDatasetError(
+            "Current subscriber profiles contain invalid "
+            "activity ranges."
+        )
+
+    try:
+        profile_timezone = (
+            profiles["profile_updated_at"].dt.tz
+        )
+    except AttributeError as error:
+        raise CuratedDatasetError(
+            "profile_updated_at must contain timezone-aware "
+            "timestamps."
+        ) from error
+
+    if (
+        profile_timezone is None
+        or str(profile_timezone) != "UTC"
+    ):
+        raise CuratedDatasetError(
+            "profile_updated_at must contain UTC timestamps."
+        )
+
+    reconciliation_columns = {
+        "event_count": "lifetime_event_count",
+        "total_bytes_dl": "lifetime_total_bytes_dl",
+        "total_bytes_ul": "lifetime_total_bytes_ul",
+        "total_bytes": "lifetime_total_bytes",
+        "latency_sum": "lifetime_latency_sum",
+        "latency_sample_count": (
+            "lifetime_latency_sample_count"
+        ),
+        "packet_loss_sum": (
+            "lifetime_packet_loss_sum"
+        ),
+        "packet_loss_sample_count": (
+            "lifetime_packet_loss_sample_count"
+        ),
+    }
+
+    expected_metrics = (
+        daily_history
+        .groupby(
+            "subscriber_id",
+            as_index=False,
+        )
+        .agg(
+            {
+                source_column: "sum"
+                for source_column
+                in reconciliation_columns
+            }
+        )
+        .rename(
+            columns=reconciliation_columns
+        )
+        .set_index("subscriber_id")
+        .sort_index()
+    )
+
+    actual_metrics = (
+        profiles[
+            [
+                "subscriber_id",
+                *reconciliation_columns.values(),
+            ]
+        ]
+        .set_index("subscriber_id")
+        .sort_index()
+    )
+
+    metric_differences = (
+        actual_metrics
+        .subtract(expected_metrics)
+        .abs()
+    )
+
+    if metric_differences.gt(1e-9).any().any():
+        raise CuratedDatasetError(
+            "Current subscriber profile metrics do not "
+            "reconcile with the daily activity history."
+        )
+
+def publish_current_subscriber_profiles(
+    profiles: pd.DataFrame,
+    output_directory: Path,
+) -> Path:
+    if profiles.empty:
+        raise CuratedDatasetError(
+            "Cannot publish an empty current subscriber "
+            "profile dataset."
+        )
+
+    output_directory = Path(output_directory)
+
+    output_directory.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    output_file = (
+        output_directory
+        / CURRENT_PROFILE_FILENAME
+    )
+
+    temporary_file = (
+        output_directory
+        / CURRENT_PROFILE_TEMPORARY_FILENAME
+    )
+
+    try:
+        table = pa.Table.from_pandas(
+            profiles,
+            preserve_index=False,
+        )
+
+        pq.write_table(
+            table,
+            temporary_file,
+            compression="snappy",
+        )
+
+        published_profiles = pd.read_parquet(
+            temporary_file
+        )
+
+        if len(published_profiles) != len(profiles):
+            raise CuratedDatasetError(
+                "Temporary current subscriber profile row "
+                "count does not match the source dataset."
+            )
+
+        if list(published_profiles.columns) != list(
+            profiles.columns
+        ):
+            raise CuratedDatasetError(
+                "Temporary current subscriber profile schema "
+                "does not match the source dataset."
+            )
+
+        temporary_file.replace(
+            output_file
+        )
+
+    except Exception:
+        if temporary_file.exists():
+            temporary_file.unlink()
+
+        raise
+
+    return output_file
+
+def build_current_subscriber_profiles_snapshot(
+    daily_activity_directory: Path,
+    output_directory: Path,
+    profile_updated_at: datetime | None = None,
+) -> Path:
+    daily_history = (
+        load_validated_daily_activity_history(
+            daily_activity_directory
+        )
+    )
+
+    profiles = build_current_subscriber_profiles(
+        daily_history,
+        profile_updated_at=profile_updated_at,
+    )
+
+    validate_current_subscriber_profiles(
+        profiles,
+        daily_history,
+    )
+
+    return publish_current_subscriber_profiles(
+        profiles,
+        output_directory,
+    )
