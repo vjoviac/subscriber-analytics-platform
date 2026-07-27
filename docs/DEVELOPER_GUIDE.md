@@ -14,8 +14,8 @@
 | Primary Branch | main |
 | Completed Milestone | MongoDB Atlas profile synchronization |
 | Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas |
-| Next Deliverable | FastAPI MongoDB readiness |
-| Serving Path | MongoDB Atlas and FastAPI liveness implemented; subscriber endpoints and Dashboard planned |
+| Next Deliverable | FastAPI subscriber profile lookup |
+| Serving Path | MongoDB Atlas with FastAPI liveness and readiness implemented; subscriber endpoints and Dashboard planned |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
 | Architectural Style | Layered Batch Pipeline |
@@ -64,6 +64,12 @@ Current version: **v0.2.3**
 - Typed `GET /health` liveness endpoint
 - OpenAPI-documented health response
 - 97 passing automated tests in current development
+- Application-managed MongoDB client lifecycle
+- Shared client cleanup during API shutdown
+- Typed `GET /ready` readiness endpoint
+- Deterministic readiness failure without credential exposure
+- Mocked readiness and lifecycle tests without Atlas dependency
+- 101 passing automated tests in current development
 
 ## Completed milestone
 
@@ -196,7 +202,7 @@ Semantic Versioning:
 | ✅ | Daily Aggregation |
 | ✅ | subscriber_profiles_current |
 | ✅ | MongoDB Atlas profile synchronization |
-| 🚧 | FastAPI — `GET /health` implemented |
+| 🚧 | FastAPI — liveness and readiness implemented |
 | ⏳ | Dashboard |
 | ⏳ | Glue / Athena |
 
@@ -262,12 +268,18 @@ profiles with zero modifications and zero upserts.
 
 ## 9.2 Next milestone
 
-The FastAPI milestone is in progress. Its first increment provides a typed
-`GET /health` liveness endpoint that does not depend on MongoDB.
+The FastAPI milestone is in progress. The implemented increments provide:
 
-The next increment will add the application-managed MongoDB client lifecycle
-and `GET /ready`. FastAPI will consume MongoDB Atlas; it must not read Raw
-files or expose database credentials.
+- a typed `GET /health` liveness endpoint independent of MongoDB;
+- an application-managed shared MongoDB client;
+- client cleanup during application shutdown;
+- a typed `GET /ready` endpoint backed by a MongoDB ping;
+- deterministic `503 Service Unavailable` behavior when MongoDB is unavailable.
+
+The next increment will define the stable public subscriber profile model and
+implement lookup by `subscriber_id`. FastAPI will consume MongoDB Atlas; it
+must not read Raw files or expose database credentials or database-specific
+identifiers.
 
 Dashboard work remains deferred until the API contract is implemented and
 tested.

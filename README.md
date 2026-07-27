@@ -6,7 +6,7 @@ The project demonstrates practical skills in data engineering, solution architec
 
 > **Current release:** `v0.2.3`  
 > **Current focus:** incremental FastAPI subscriber profile service development.<br>
-> **Current API increment:** typed `GET /health` liveness endpoint.
+> **Current API increment:** liveness and MongoDB readiness endpoints.
 
 ---
 
@@ -60,10 +60,14 @@ The project evolves in stages so that each architectural capability can be imple
 - Post-write synchronization validation and reporting.
 - FastAPI application foundation.
 - Typed `GET /health` liveness endpoint with OpenAPI documentation.
+- Application-managed MongoDB client lifecycle.
+- Typed `GET /ready` endpoint with Atlas connectivity validation.
+- Deterministic `503 Service Unavailable` readiness response.
+- MongoDB-independent API tests using mocked clients.
 
 ### Planned
 
-- MongoDB-backed FastAPI readiness and subscriber endpoints.
+- MongoDB-backed subscriber profile endpoints.
 - Dashboard consuming the API.
 - AWS Glue Data Catalog.
 - Amazon Athena analytical queries.
@@ -275,10 +279,10 @@ The MongoDB milestone closed with:
 95 passed
 ```
 
-The first FastAPI increment extends the complete suite to:
+The FastAPI liveness and readiness increments extend the complete suite to:
 
 ```text
-97 passed
+101 passed
 ```
 
 ---
@@ -305,15 +309,39 @@ Expected JSON response:
 }
 ```
 
+Check MongoDB readiness:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/ready
+```
+
+Expected response when MongoDB is available:
+
+```json
+{
+  "status": "ready"
+}
+```
+
+When MongoDB is not configured or unavailable, the endpoint returns
+`503 Service Unavailable`:
+
+```json
+{
+  "status": "not_ready",
+  "detail": "MongoDB is unavailable."
+}
+```
+
 Interactive OpenAPI documentation is available at:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-`GET /health` checks only whether the API process is running. It does not
-connect to MongoDB. MongoDB readiness will be implemented in a separate
-increment.
+`GET /health` checks only whether the API process is running. `GET /ready`
+checks MongoDB connectivity using the application-managed shared client.
+A MongoDB failure does not prevent the liveness endpoint from responding.
 
 ---
 

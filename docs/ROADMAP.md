@@ -81,8 +81,8 @@ Operational capabilities:
 - post-write validation and synchronization reports.
 
 The latest immutable release tag remains `v0.2.3`. MongoDB Atlas synchronization
-is complete and the FastAPI milestone is in progress. Its first increment adds
-a typed liveness endpoint without introducing a MongoDB runtime dependency.
+is complete and the FastAPI milestone is in progress. Typed liveness and
+MongoDB-backed readiness endpoints are implemented and tested.
 
 ---
 
@@ -264,12 +264,26 @@ Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
 - local development-server instructions;
 - 97 passing automated tests.
 
+### Completed second increment
+
+- application-managed shared MongoDB client lifecycle;
+- client cleanup during application shutdown;
+- typed `GET /ready` readiness endpoint;
+- MongoDB connectivity validation through `ping`;
+- deterministic `503 Service Unavailable` response;
+- liveness continuity when MongoDB is unavailable;
+- mocked lifecycle and readiness tests without Atlas dependency;
+- successful manual readiness validation against MongoDB Atlas;
+- 101 passing automated tests.
+
 ### Next increment
 
-- application-managed MongoDB client lifecycle;
-- `GET /ready` dependency readiness check;
-- deterministic readiness failure response;
-- automated tests without requiring Atlas connectivity.
+- stable public subscriber profile response model;
+- MongoDB lookup by canonical `subscriber_id`;
+- exclusion of MongoDB `_id` from the public contract;
+- deterministic `404 Not Found` response;
+- database failure handling without leaking internal details;
+- automated tests without Atlas dependency.
 
 ### Non-goals for the first increment
 
@@ -306,10 +320,10 @@ Transform the project from a batch pipeline into an end-to-end platform that exp
 
 #### FastAPI
 
-- configuration;
-- database connection lifecycle;
-- typed Pydantic models;
-- health and readiness endpoints;
+- ✅ configuration;
+- ✅ database connection lifecycle;
+- ⏳ subscriber profile Pydantic models;
+- ✅ health and readiness endpoints;
 - subscriber lookup;
 - subscriber listing with pagination;
 - selected filters;
