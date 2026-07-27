@@ -34,6 +34,7 @@ Recommended:
 - Visual Studio Code or another Python-capable editor;
 - PowerShell, Bash, or equivalent shell;
 - AWS CLI for S3 integration;
+- a MongoDB Atlas project only when running the serving synchronization;
 - Docker only for containerized milestones.
 
 ---
@@ -78,7 +79,8 @@ Rules:
 - never commit passwords, tokens, connection strings, or private keys;
 - never place AWS keys in source code;
 - use an AWS named profile locally;
-- use environment variables or a secret manager for MongoDB;
+- keep `MONGODB_URI` only in `.env` or an approved secret manager;
+- never commit a populated MongoDB connection string;
 - sanitize logs and screenshots.
 
 ---
@@ -284,6 +286,24 @@ python -m scripts.run_current_profiles
 ```
 
 Confirm that the output contains exactly one row per `subscriber_id`, no duplicate subscriber keys, valid UTC metadata, and no temporary publication artifact.
+
+### Manual MongoDB synchronization validation
+
+After the current profile is valid and Atlas connectivity is configured:
+
+```bash
+python -m scripts.sync_mongodb_profiles
+```
+
+Run the command twice. The second unchanged run should report zero modified and
+zero upserted documents. Confirm that:
+
+- the document count equals the source profile count;
+- distinct `subscriber_id` count equals the document count;
+- `_id_` and `uq_subscriber_id` exist;
+- `uq_subscriber_id` is unique;
+- existing `_id` values are preserved;
+- dates are BSON dates and missing values are BSON nulls.
 
 ---
 

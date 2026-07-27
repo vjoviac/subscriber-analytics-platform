@@ -994,7 +994,7 @@ def build_subscriber_activity_coverage(
                 "min",
             ),
             last_activity_at=(
-                "window_end",
+                "window_start",
                 "max",
             ),
             active_day_count=(

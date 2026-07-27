@@ -58,6 +58,8 @@ Hourly Curated Parquet
 Daily Curated Parquet
     ↓
 Current Subscriber Profiles
+    ↓
+MongoDB Atlas
 ```
 
 Operational capabilities:
@@ -72,8 +74,14 @@ Operational capabilities:
 - S3 upload integration;
 - current-profile validation and reconciliation;
 - atomic current-profile publication.
+- secure MongoDB Atlas configuration;
+- validated Parquet-to-BSON conversion;
+- unique subscriber serving index;
+- idempotent bulk upserts;
+- post-write validation and synchronization reports.
 
-The current release is `v0.2.3`. The next milestone is MongoDB Atlas synchronization.
+The latest immutable release tag remains `v0.2.3`. MongoDB Atlas synchronization
+is complete in current development. The next milestone is FastAPI.
 
 ---
 
@@ -162,7 +170,9 @@ Exit criteria:
 
 ---
 
-## 5. Next milestone — MongoDB Atlas
+## 5. Completed milestone — MongoDB Atlas
+
+**Status:** Completed after `v0.2.3`.
 
 ### Objective
 
@@ -177,13 +187,16 @@ data/curated/subscriber_profiles_current/
 
 ### Deliverables
 
-- connect through environment-based credentials;
-- upsert by `subscriber_id`;
-- use bulk operations;
-- report inserted, matched, modified, and failed counts;
-- preserve version and update timestamps;
-- avoid deleting unobserved profiles by default;
-- make full replacement explicit.
+- secure environment-based connection and explicit timeouts;
+- `subscriber_analytics.subscriber_profiles`;
+- MongoDB-generated `_id` and top-level `subscriber_id`;
+- unique `uq_subscriber_id` index;
+- validation of the 29-column current snapshot;
+- BSON-safe nested document conversion;
+- unordered bulk upserts by `subscriber_id`;
+- source, matched, modified, upserted, failed, and validated counts;
+- preservation of profile version and update timestamps;
+- no implicit deletion of unobserved profiles.
 
 Repeated synchronization of the same snapshot must not create duplicates.
 
@@ -191,7 +204,8 @@ Repeated synchronization of the same snapshot must not create duplicates.
 
 ```text
 MongoDB Atlas
-└── subscriber_profiles collection
+└── subscriber_analytics
+    └── subscriber_profiles
 ```
 
 ### Non-goals
@@ -210,7 +224,38 @@ MongoDB Atlas
 - repeated synchronization does not create additional documents;
 - synchronization reports inserted, matched, modified, and failed counts;
 - existing profiles are not deleted implicitly;
-- unit and explicitly marked integration tests pass.
+- the full automated suite passes;
+- the deployed Atlas collection is validated manually.
+
+The milestone closed with 95 passing automated tests and an end-to-end
+verification using two subscriber documents. A second unchanged synchronization
+produced no duplicates.
+
+The profile activity-date contract was also corrected so
+`last_activity_at = max(window_start)`. Daily `window_end` remains exclusive.
+
+---
+
+## 5.1 Next milestone — FastAPI
+
+### Objective
+
+Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
+
+### Initial scope
+
+- MongoDB client lifecycle;
+- health and readiness;
+- subscriber lookup by `subscriber_id`;
+- stable response model;
+- error handling;
+- automated tests.
+
+### Non-goals for the first increment
+
+- dashboard implementation;
+- direct Parquet reads from the API;
+- broad analytical endpoints without defined requirements.
 
 ---
 
@@ -230,14 +275,14 @@ Transform the project from a batch pipeline into an end-to-end platform that exp
 
 #### MongoDB Atlas
 
-- secure cluster configuration;
-- connection string through environment variables;
-- database and collection design;
-- unique subscriber key;
-- bulk upsert synchronization;
-- query-driven indexes;
-- synchronization report;
-- validation or integration tests.
+- ✅ secure cluster configuration;
+- ✅ connection string through environment variables;
+- ✅ database and collection design;
+- ✅ unique subscriber key;
+- ✅ bulk upsert synchronization;
+- ✅ synchronization report and post-write validation;
+- ✅ automated tests;
+- ⏳ additional query-driven indexes after FastAPI access patterns are defined.
 
 #### FastAPI
 

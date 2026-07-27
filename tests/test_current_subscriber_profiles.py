@@ -548,7 +548,7 @@ def test_build_subscriber_activity_coverage_calculates_dates_and_days() -> None:
         "2026-07-21T00:00:00Z"
     )
     assert coverage["last_activity_at"] == pd.Timestamp(
-        "2026-07-23T00:00:00Z"
+        "2026-07-22T00:00:00Z"
     )
     assert coverage["active_day_count"] == 2
 
@@ -734,7 +734,7 @@ def test_build_current_subscriber_profiles_combines_profile_components(
         "2026-07-21T00:00:00Z"
     )
     assert profile["last_activity_at"] == pd.Timestamp(
-        "2026-07-23T00:00:00Z"
+        "2026-07-22T00:00:00Z"
     )
     assert profile["active_day_count"] == 2
 

@@ -34,14 +34,14 @@ Atomically publish the current-profile snapshot
 Write structured execution report
 ```
 
-Planned extension:
+Serving extension:
 
 ```text
 Current subscriber profiles
           ↓
-Synchronize MongoDB Atlas
+Synchronize MongoDB Atlas — implemented
           ↓
-Serve through FastAPI
+Serve through FastAPI — planned
           ↓
 Consume from dashboard
 ```
@@ -375,6 +375,11 @@ data/curated/subscriber_profiles_current/
 13. Write a temporary file.
 14. Atomically replace the final snapshot.
 
+Activity coverage uses the inclusive daily `window_start`: the first activity
+is `min(window_start)` and the last activity is `max(window_start)`.
+`window_end` remains the exclusive boundary of each daily interval and is not
+treated as an observed activity date.
+
 The builder works independently and is also integrated into the daily orchestrator after raw-hourly-daily reconciliation. A failed profile build prevents the run from being reported as successful and does not replace a previously valid snapshot.
 
 Standalone rebuild:
@@ -387,7 +392,7 @@ The standalone command uses `DAILY_ACTIVITY_DIRECTORY` and `SUBSCRIBER_PROFILES_
 
 ---
 
-## 12. Planned stage — MongoDB synchronization
+## 12. Stage 8 — MongoDB synchronization
 
 ### Input
 
@@ -395,19 +400,68 @@ Current subscriber profile Parquet.
 
 ### Output
 
-MongoDB Atlas collection.
+```text
+subscriber_analytics.subscriber_profiles
+```
 
-### Recommended behavior
+### Entry point
 
-- connect through environment-based credentials;
-- upsert by `subscriber_id`;
-- use bulk operations;
-- report inserted, matched, modified, and failed counts;
-- preserve version and update timestamps;
-- avoid deleting unobserved profiles by default;
-- make full replacement explicit.
+```bash
+python -m scripts.sync_mongodb_profiles
+```
 
-Repeated synchronization of the same snapshot must not create duplicates.
+### Configuration
+
+```dotenv
+MONGODB_URI=
+MONGODB_DATABASE=subscriber_analytics
+MONGODB_COLLECTION=subscriber_profiles
+MONGODB_TIMEOUT_MS=10000
+```
+
+### Processing sequence
+
+1. Read `subscriber_profiles_current.parquet`.
+2. Reject a missing or empty snapshot.
+3. Validate the complete 29-column profile contract.
+4. Validate unique, non-null, and non-blank `subscriber_id` values.
+5. Parse `first_activity_at`, `last_activity_at`, and `profile_updated_at` as UTC.
+6. Convert each row to a nested BSON-safe document.
+7. Connect to Atlas and execute an administrative ping.
+8. Obtain the configured database and collection.
+9. Ensure the unique `uq_subscriber_id` index.
+10. Build one `UpdateOne(..., upsert=True)` operation per subscriber.
+11. Execute `bulk_write(..., ordered=False)`.
+12. Count the source subscriber IDs found in MongoDB.
+13. Reject a post-write count mismatch.
+14. Return a synchronization report.
+15. Close the MongoDB client in all outcomes.
+
+### Idempotence
+
+The upsert filter is the top-level `subscriber_id` and the update uses `$set`
+with the complete profile document. MongoDB generates `_id` only on insertion.
+An unchanged second run matches existing profiles without adding documents or
+changing their `_id`.
+
+No `synced_at` value is written because a new synchronization timestamp would
+modify otherwise unchanged documents and obscure idempotence.
+
+### Report
+
+The command prints:
+
+- `source_profile_count`;
+- `matched_count`;
+- `modified_count`;
+- `upserted_count`;
+- `failed_count`;
+- `validated_profile_count`.
+
+### Deletion semantics
+
+The synchronization does not delete MongoDB documents that are absent from the
+source snapshot. Full replacement remains an explicit future capability.
 
 ---
 
@@ -613,6 +667,12 @@ This is especially important for current-profile snapshots.
 - final reconciliation failure.
 
 Tests should use deterministic data and temporary directories. AWS or MongoDB dependencies should be explicitly marked as external integration tests.
+
+The MongoDB unit suite mocks external connectivity and covers configuration,
+connection cleanup, snapshot validation, BSON conversion, index creation,
+operation construction, bulk-write reporting, failure propagation, and script
+orchestration. The full automated suite contained 95 passing tests at milestone
+completion.
 
 ---
 

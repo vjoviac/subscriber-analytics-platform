@@ -5,8 +5,8 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
 > **Current release:** `v0.2.3`  
-> **Current focus:** a reliable batch pipeline through the atomic current subscriber profile snapshot.  
-> **Next platform milestone:** MongoDB Atlas synchronization.
+> **Current focus:** a reliable batch pipeline with an idempotent MongoDB Atlas serving synchronization.  
+> **Next platform milestone:** FastAPI subscriber profile service.
 
 ---
 
@@ -53,10 +53,14 @@ The project evolves in stages so that each architectural capability can be imple
 - Deterministic latest-state and lifetime-metric construction.
 - Atomic current-profile publication.
 - Current-profile integration with the daily pipeline and execution report.
+- Secure MongoDB Atlas configuration through `.env`.
+- Validated conversion of the 29-column current-profile snapshot to BSON documents.
+- Unique `subscriber_id` serving index.
+- Unordered idempotent bulk upserts.
+- Post-write synchronization validation and reporting.
 
 ### Planned
 
-- MongoDB Atlas serving layer.
 - FastAPI service.
 - Dashboard consuming the API.
 - AWS Glue Data Catalog.
@@ -134,12 +138,16 @@ subscriber-analytics-platform/
 │   └── event_generator.py
 ├── infrastructure/
 │   ├── aws_config.py
+│   ├── mongodb_config.py
 │   └── logging_config.py
 ├── ingestion/
 │   └── s3_loader.py
 ├── scripts/
 │   ├── run_current_profiles.py
-│   └── run_daily_pipeline.py
+│   ├── run_daily_pipeline.py
+│   └── sync_mongodb_profiles.py
+├── serving/
+│   └── mongodb_profiles.py
 ├── storage/
 │   └── storage_manager.py
 ├── tests/
@@ -162,6 +170,8 @@ Some directories contain placeholders for later milestones.
 - A Python virtual environment.
 - AWS CLI only for S3 integration.
 - An AWS named profile with access to the development bucket when cloud upload is enabled.
+- A MongoDB Atlas cluster and database user for serving synchronization.
+- A network access rule that allows the development client to reach Atlas.
 
 ---
 
@@ -198,6 +208,17 @@ Copy-Item .env.example .env
 ```
 
 Do not commit `.env`.
+
+For MongoDB synchronization, configure:
+
+```dotenv
+MONGODB_URI=
+MONGODB_DATABASE=subscriber_analytics
+MONGODB_COLLECTION=subscriber_profiles
+MONGODB_TIMEOUT_MS=10000
+```
+
+Keep the connection string only in the local `.env` file.
 
 ---
 
@@ -245,6 +266,42 @@ pytest
 ```
 
 Tests should run before every commit that changes pipeline behavior, schemas, storage paths, validation rules, or orchestration.
+
+The MongoDB milestone closed with:
+
+```text
+95 passed
+```
+
+---
+
+## Synchronizing current profiles to MongoDB Atlas
+
+Build or refresh the current snapshot first:
+
+```bash
+python -m scripts.run_current_profiles
+```
+
+Then synchronize it:
+
+```bash
+python -m scripts.sync_mongodb_profiles
+```
+
+The command:
+
+1. validates `subscriber_profiles_current.parquet`;
+2. verifies the Atlas connection;
+3. obtains `subscriber_analytics.subscriber_profiles`;
+4. ensures the unique `uq_subscriber_id` index;
+5. converts profile rows to nested BSON-safe documents;
+6. performs unordered bulk upserts by `subscriber_id`;
+7. validates that every source subscriber exists in the collection;
+8. prints source, matched, modified, upserted, failed, and validated counts.
+
+Running the command again with an unchanged snapshot does not create duplicate
+documents and should produce zero modifications and zero upserts.
 
 ---
 
@@ -301,13 +358,15 @@ Existing Git tags are immutable and are never reused.
 - Public access blocking is enabled.
 - The generated telecom data is fictional.
 - Logs and reports must not contain secrets.
-- MongoDB credentials will be supplied through environment variables or a secret manager.
+- MongoDB credentials are supplied through environment variables and are never committed.
+- Atlas network access is restricted to explicitly authorized client addresses.
 
 ---
 
 ## Project status
 
-Release `v0.2.3` represents the reliable batch pipeline foundation:
+Release `v0.2.3` remains the latest immutable tag. Current development adds the
+MongoDB Atlas serving synchronization to that reliable batch foundation:
 
 ```text
 Raw JSONL
@@ -319,13 +378,13 @@ Hourly Curated Parquet
 Daily Curated Parquet
     ↓
 Current Subscriber Profiles
+    ↓
+MongoDB Atlas
 ```
 
-The next architectural milestone extends the platform into a serving system:
+The next architectural milestone exposes the serving data through an application contract:
 
 ```text
-Current Subscriber Profiles
-    ↓
 MongoDB Atlas
     ↓
 FastAPI

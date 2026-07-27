@@ -9,7 +9,9 @@ The architecture supports two goals:
 1. Build a reliable pipeline that produces trustworthy data products.
 2. Demonstrate solution architecture decisions across data engineering, cloud storage, serving, APIs, observability, and analytics.
 
-The platform currently runs as a batch pipeline. Its target state adds an operational serving layer, API, dashboard, and cloud-native analytical query path.
+The platform currently runs as a batch pipeline with MongoDB Atlas as its
+operational serving store. Its target state adds an API, dashboard, and
+cloud-native analytical query path.
 
 ---
 
@@ -114,6 +116,12 @@ Raw / Hourly / Daily Validation
 Build and Validate Current Subscriber Profiles
       ↓
 Atomic Snapshot Publication
+      ↓
+Validate and Transform Profiles
+      ↓
+Idempotent Bulk Upsert
+      ↓
+MongoDB Atlas
 
 Cross-cutting capabilities:
 - centralized configuration;
@@ -122,7 +130,9 @@ Cross-cutting capabilities:
 - rerun controls;
 - unit tests;
 - S3 upload support;
-- atomic snapshot publication.
+- atomic snapshot publication;
+- environment-based MongoDB configuration;
+- unique serving key and post-write validation.
 ```
 
 ---
@@ -278,10 +288,24 @@ Responsibilities:
 
 - provide low-latency profile retrieval;
 - support document-oriented profiles;
-- index common lookup and filtering fields;
+- enforce one document per top-level `subscriber_id`;
+- use the unique `uq_subscriber_id` index;
+- receive validated unordered bulk upserts from the Parquet snapshot;
+- report and validate synchronization outcomes;
 - decouple API access from Parquet scans.
 
 MongoDB is not the historical system of record.
+
+The implemented database and collection are:
+
+```text
+subscriber_analytics.subscriber_profiles
+```
+
+MongoDB generates each document `_id` as an `ObjectId`. The stable business key
+is the top-level `subscriber_id`, which is both the upsert filter and the unique
+indexed field. Synchronization does not delete documents that are absent from
+the current source snapshot.
 
 ### 6.9 FastAPI
 
@@ -483,12 +507,16 @@ A failed run must:
 - `.env` excluded from Git;
 - no secrets in source code;
 - no generated data in Git.
+- MongoDB network restrictions;
+- MongoDB database-user authentication;
+- environment-based MongoDB secrets;
+- explicit MongoDB connection and server-selection timeouts;
+- unique subscriber index.
 
 ### Planned controls
 
-- MongoDB network restrictions;
-- separate application and administrative users;
-- environment-based or managed secrets;
+- separate application and administrative users where deployment requires them;
+- managed secrets for deployed environments;
 - API validation and rate limits;
 - least-privilege deployment roles;
 - dependency scanning;
@@ -537,7 +565,8 @@ S3 upload, environment configuration, and least-privilege IAM.
 
 ### Stage 3 — Operational serving
 
-MongoDB Atlas, FastAPI, and dashboard, using the completed current-profile snapshot as input.
+MongoDB Atlas synchronization is implemented using the completed
+current-profile snapshot. FastAPI and dashboard consumption remain planned.
 
 ### Stage 4 — Cloud analytics
 

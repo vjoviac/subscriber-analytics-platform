@@ -110,3 +110,23 @@ LOG_LEVEL = os.getenv(
     "LOG_LEVEL",
     "INFO",
 ).upper()
+
+MONGODB_URI = os.getenv(
+    "MONGODB_URI",
+    "",
+).strip()
+
+MONGODB_DATABASE = os.getenv(
+    "MONGODB_DATABASE",
+    "subscriber_analytics",
+).strip()
+
+MONGODB_COLLECTION = os.getenv(
+    "MONGODB_COLLECTION",
+    "subscriber_profiles",
+).strip()
+
+MONGODB_TIMEOUT_MS = get_positive_integer(
+    variable_name="MONGODB_TIMEOUT_MS",
+    default=10000,
+)

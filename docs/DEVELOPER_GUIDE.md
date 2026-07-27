@@ -12,10 +12,10 @@
 | Current Version | v0.2.3 |
 | Current Git Tag | v0.2.3 |
 | Primary Branch | main |
-| Current Milestone | MongoDB Atlas |
-| Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles |
-| Next Deliverable | MongoDB Atlas integration |
-| Planned Serving Layer | MongoDB Atlas → FastAPI → Dashboard |
+| Completed Milestone | MongoDB Atlas profile synchronization |
+| Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas |
+| Next Deliverable | FastAPI subscriber profile service |
+| Serving Path | MongoDB Atlas implemented; FastAPI and Dashboard planned |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
 | Architectural Style | Layered Batch Pipeline |
@@ -51,8 +51,17 @@ Current version: **v0.2.3**
 - Lifetime usage and weighted quality metrics
 - Atomic snapshot publication
 - Current-profile orchestration integration
+- Secure MongoDB Atlas configuration through environment variables
+- PyMongo connection verification with explicit timeouts
+- `subscriber_analytics.subscriber_profiles` serving collection
+- Unique `uq_subscriber_id` index
+- Validated Parquet-to-BSON profile transformation
+- Unordered bulk upserts keyed by `subscriber_id`
+- Post-write subscriber-count validation
+- Idempotent synchronization reporting
+- 95 passing automated tests at milestone completion
 
-## Current milestone
+## Completed milestone
 
 **MongoDB Atlas**
 
@@ -95,10 +104,8 @@ Curated Daily
 Current Subscriber Profiles
     ↓
 MongoDB Atlas
-    ↓
-FastAPI
-    ↓
-Dashboard
+    ↓ planned
+FastAPI → Dashboard
 ```
 
 Design principles:
@@ -136,6 +143,9 @@ Design principles:
 - UTC everywhere.
 - One subscriber profile per subscriber.
 - Atomic snapshot writes.
+- Parquet remains the canonical analytical output.
+- MongoDB synchronization never deletes profiles implicitly.
+- `window_end` is exclusive; profile activity dates use daily `window_start`.
 
 ---
 
@@ -181,16 +191,16 @@ Semantic Versioning:
 | ✅ | Hourly Aggregation |
 | ✅ | Daily Aggregation |
 | ✅ | subscriber_profiles_current |
-| ⏳ | MongoDB Atlas |
+| ✅ | MongoDB Atlas profile synchronization |
 | ⏳ | FastAPI |
 | ⏳ | Dashboard |
 | ⏳ | Glue / Athena |
 
 ---
 
-# 9. Next Milestone
+# 9. Completed MongoDB Atlas Milestone
 
-Goal: **MongoDB Atlas**
+Goal: synchronize the current profile snapshot to MongoDB Atlas as an operational serving layer.
 
 Input:
 
@@ -198,19 +208,59 @@ Input:
 
 Output:
 
-- MongoDB Atlas collection
+- `subscriber_analytics.subscriber_profiles`
 
-Requirements:
+Implemented behavior:
 
-- connect through environment-based credentials;
-- upsert by `subscriber_id`;
-- use bulk operations;
-- report inserted, matched, modified, and failed counts;
-- preserve version and update timestamps;
-- avoid deleting unobserved profiles by default;
-- make full replacement explicit.
+- connect through `MONGODB_URI` without committing credentials;
+- use configurable database, collection, and timeout settings;
+- create the unique `uq_subscriber_id` index;
+- validate the 29-column Parquet snapshot before synchronization;
+- convert pandas and NumPy values to BSON-safe values;
+- use unordered bulk upserts filtered by `subscriber_id`;
+- report source, matched, modified, upserted, failed, and validated counts;
+- preserve `profile_version` and `profile_updated_at`;
+- avoid deleting profiles that are absent from the source snapshot;
+- close the MongoDB client on success and failure.
 
 Repeated synchronization of the same snapshot must not create duplicates.
+
+The implementation uses MongoDB-generated `ObjectId` values for `_id` and a
+separate unique top-level `subscriber_id` business key.
+
+## 9.1 MongoDB configuration
+
+Copy `.env.example` to `.env` and configure:
+
+```dotenv
+MONGODB_URI=
+MONGODB_DATABASE=subscriber_analytics
+MONGODB_COLLECTION=subscriber_profiles
+MONGODB_TIMEOUT_MS=10000
+```
+
+Never commit a populated `MONGODB_URI`.
+
+Verify connectivity:
+
+```bash
+python -c "from infrastructure.mongodb_config import verify_mongodb_connection; verify_mongodb_connection(); print('MongoDB Atlas connection successful')"
+```
+
+Synchronize the current snapshot:
+
+```bash
+python -m scripts.sync_mongodb_profiles
+```
+
+A second synchronization of an unchanged snapshot should report matched
+profiles with zero modifications and zero upserts.
+
+## 9.2 Next milestone
+
+The next milestone is FastAPI. It will consume MongoDB Atlas; it must not read
+Raw files or expose database credentials. Dashboard work remains deferred until
+the API contract is implemented and tested.
 
 ---
 
