@@ -14,8 +14,8 @@
 | Primary Branch | main |
 | Completed Milestone | MongoDB Atlas profile synchronization |
 | Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas |
-| Next Deliverable | FastAPI subscriber profile service |
-| Serving Path | MongoDB Atlas implemented; FastAPI and Dashboard planned |
+| Next Deliverable | FastAPI MongoDB readiness |
+| Serving Path | MongoDB Atlas and FastAPI liveness implemented; subscriber endpoints and Dashboard planned |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
 | Architectural Style | Layered Batch Pipeline |
@@ -60,6 +60,10 @@ Current version: **v0.2.3**
 - Post-write subscriber-count validation
 - Idempotent synchronization reporting
 - 95 passing automated tests at milestone completion
+- FastAPI application foundation
+- Typed `GET /health` liveness endpoint
+- OpenAPI-documented health response
+- 97 passing automated tests in current development
 
 ## Completed milestone
 
@@ -67,7 +71,7 @@ Current version: **v0.2.3**
 
 ## Planned milestones
 
-1. FastAPI
+1. FastAPI — in progress
 2. Dashboard
 3. AWS Glue / Athena
 
@@ -192,7 +196,7 @@ Semantic Versioning:
 | ✅ | Daily Aggregation |
 | ✅ | subscriber_profiles_current |
 | ✅ | MongoDB Atlas profile synchronization |
-| ⏳ | FastAPI |
+| 🚧 | FastAPI — `GET /health` implemented |
 | ⏳ | Dashboard |
 | ⏳ | Glue / Athena |
 
@@ -258,9 +262,15 @@ profiles with zero modifications and zero upserts.
 
 ## 9.2 Next milestone
 
-The next milestone is FastAPI. It will consume MongoDB Atlas; it must not read
-Raw files or expose database credentials. Dashboard work remains deferred until
-the API contract is implemented and tested.
+The FastAPI milestone is in progress. Its first increment provides a typed
+`GET /health` liveness endpoint that does not depend on MongoDB.
+
+The next increment will add the application-managed MongoDB client lifecycle
+and `GET /ready`. FastAPI will consume MongoDB Atlas; it must not read Raw
+files or expose database credentials.
+
+Dashboard work remains deferred until the API contract is implemented and
+tested.
 
 ---
 

@@ -81,7 +81,8 @@ Operational capabilities:
 - post-write validation and synchronization reports.
 
 The latest immutable release tag remains `v0.2.3`. MongoDB Atlas synchronization
-is complete in current development. The next milestone is FastAPI.
+is complete and the FastAPI milestone is in progress. Its first increment adds
+a typed liveness endpoint without introducing a MongoDB runtime dependency.
 
 ---
 
@@ -238,6 +239,8 @@ The profile activity-date contract was also corrected so
 
 ## 5.1 Next milestone — FastAPI
 
+**Status:** In progress.
+
 ### Objective
 
 Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
@@ -250,6 +253,23 @@ Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
 - stable response model;
 - error handling;
 - automated tests.
+
+### Completed first increment
+
+- FastAPI application foundation;
+- typed `GET /health` response model;
+- liveness behavior independent of MongoDB;
+- OpenAPI endpoint documentation;
+- automated endpoint and schema tests;
+- local development-server instructions;
+- 97 passing automated tests.
+
+### Next increment
+
+- application-managed MongoDB client lifecycle;
+- `GET /ready` dependency readiness check;
+- deterministic readiness failure response;
+- automated tests without requiring Atlas connectivity.
 
 ### Non-goals for the first increment
 

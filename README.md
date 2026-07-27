@@ -5,8 +5,8 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
 > **Current release:** `v0.2.3`  
-> **Current focus:** a reliable batch pipeline with an idempotent MongoDB Atlas serving synchronization.  
-> **Next platform milestone:** FastAPI subscriber profile service.
+> **Current focus:** incremental FastAPI subscriber profile service development.<br>
+> **Current API increment:** typed `GET /health` liveness endpoint.
 
 ---
 
@@ -58,10 +58,12 @@ The project evolves in stages so that each architectural capability can be imple
 - Unique `subscriber_id` serving index.
 - Unordered idempotent bulk upserts.
 - Post-write synchronization validation and reporting.
+- FastAPI application foundation.
+- Typed `GET /health` liveness endpoint with OpenAPI documentation.
 
 ### Planned
 
-- FastAPI service.
+- MongoDB-backed FastAPI readiness and subscriber endpoints.
 - Dashboard consuming the API.
 - AWS Glue Data Catalog.
 - Amazon Athena analytical queries.
@@ -272,6 +274,46 @@ The MongoDB milestone closed with:
 ```text
 95 passed
 ```
+
+The first FastAPI increment extends the complete suite to:
+
+```text
+97 passed
+```
+
+---
+
+## Running the FastAPI service
+
+Start the local development server from the repository root:
+
+```bash
+python -m uvicorn api.app:app --reload
+```
+
+Check API liveness:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+Expected JSON response:
+
+```json
+{
+  "status": "healthy"
+}
+```
+
+Interactive OpenAPI documentation is available at:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+`GET /health` checks only whether the API process is running. It does not
+connect to MongoDB. MongoDB readiness will be implemented in a separate
+increment.
 
 ---
 
