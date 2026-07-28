@@ -1,12 +1,23 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import FastAPI, Request, status
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Path,
+    Request,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pymongo.errors import PyMongoError
+
+from api.models import (
+    ErrorResponse,
+    SubscriberProfileResponse,
+)
 
 from infrastructure.mongodb_config import (
     MongoDBConfigurationError,
@@ -14,6 +25,10 @@ from infrastructure.mongodb_config import (
     ping_mongodb,
 )
 
+from serving.mongodb_profiles import (
+    find_subscriber_profile,
+    get_subscriber_profiles_collection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -136,4 +151,89 @@ def build_not_ready_response() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content=response.model_dump(),
+    )
+
+@app.get(
+    "/subscribers/{subscriber_id}",
+    response_model=SubscriberProfileResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": ErrorResponse,
+            "description": "Subscriber profile not found.",
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": ErrorResponse,
+            "description": (
+                "Subscriber profile service is unavailable."
+            ),
+        },
+    },
+    summary="Get subscriber profile",
+    description=(
+        "Returns the current MongoDB-backed profile for "
+        "the canonical subscriber ID."
+    ),
+)
+def get_subscriber_profile(
+    subscriber_id: Annotated[
+        str,
+        Path(
+            min_length=1,
+            max_length=64,
+            description="Canonical subscriber identifier.",
+        ),
+    ],
+    request: Request,
+) -> SubscriberProfileResponse:
+    mongodb_client = getattr(
+        request.app.state,
+        "mongodb_client",
+        None,
+    )
+
+    if mongodb_client is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Subscriber profile service is unavailable."
+            ),
+        )
+
+    try:
+        collection = (
+            get_subscriber_profiles_collection(
+                mongodb_client
+            )
+        )
+        profile_document = find_subscriber_profile(
+            collection,
+            subscriber_id,
+        )
+    except (
+        MongoDBConfigurationError,
+        PyMongoError,
+    ):
+        logger.warning(
+            "Subscriber profile lookup failed."
+        )
+
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Subscriber profile service is unavailable."
+            ),
+        ) from None
+
+    if profile_document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subscriber profile not found.",
+        )
+
+    return SubscriberProfileResponse.model_validate(
+        profile_document
     )

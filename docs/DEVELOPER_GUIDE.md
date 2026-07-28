@@ -14,8 +14,8 @@
 | Primary Branch | main |
 | Completed Milestone | MongoDB Atlas profile synchronization |
 | Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas |
-| Next Deliverable | FastAPI subscriber profile lookup |
-| Serving Path | MongoDB Atlas with FastAPI liveness and readiness implemented; subscriber endpoints and Dashboard planned |
+| Next Deliverable | FastAPI subscriber listing with pagination |
+| Serving Path | MongoDB Atlas with FastAPI liveness, readiness, and subscriber lookup implemented |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
 | Architectural Style | Layered Batch Pipeline |
@@ -70,6 +70,12 @@ Current version: **v0.2.3**
 - Deterministic readiness failure without credential exposure
 - Mocked readiness and lifecycle tests without Atlas dependency
 - 101 passing automated tests in current development
+- Stable nested subscriber profile response model
+- MongoDB lookup by canonical `subscriber_id`
+- MongoDB `_id` exclusion through query projection and response modeling
+- Deterministic subscriber `404` and service `503` responses
+- UTC-aware MongoDB reads
+- 107 passing automated tests in current development
 
 ## Completed milestone
 
@@ -202,7 +208,7 @@ Semantic Versioning:
 | ✅ | Daily Aggregation |
 | ✅ | subscriber_profiles_current |
 | ✅ | MongoDB Atlas profile synchronization |
-| 🚧 | FastAPI — liveness and readiness implemented |
+| 🚧 | FastAPI — liveness, readiness, and subscriber lookup implemented |
 | ⏳ | Dashboard |
 | ⏳ | Glue / Athena |
 
@@ -276,13 +282,15 @@ The FastAPI milestone is in progress. The implemented increments provide:
 - a typed `GET /ready` endpoint backed by a MongoDB ping;
 - deterministic `503 Service Unavailable` behavior when MongoDB is unavailable.
 
-The next increment will define the stable public subscriber profile model and
-implement lookup by `subscriber_id`. FastAPI will consume MongoDB Atlas; it
-must not read Raw files or expose database credentials or database-specific
-identifiers.
+The subscriber lookup increment adds a stable nested public response model and
+`GET /subscribers/{subscriber_id}` backed by MongoDB Atlas. The endpoint
+excludes MongoDB `_id`, preserves UTC timestamps, returns `404 Not Found` for
+unknown subscribers, and returns `503 Service Unavailable` without exposing
+internal database details.
 
-Dashboard work remains deferred until the API contract is implemented and
-tested.
+The next increment will implement subscriber listing with bounded pagination.
+Selected filters remain deferred until concrete dashboard requirements define
+the access patterns and required indexes.
 
 ---
 

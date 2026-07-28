@@ -6,7 +6,7 @@ The project demonstrates practical skills in data engineering, solution architec
 
 > **Current release:** `v0.2.3`  
 > **Current focus:** incremental FastAPI subscriber profile service development.<br>
-> **Current API increment:** liveness and MongoDB readiness endpoints.
+> **Current API increment:** MongoDB-backed subscriber profile lookup.
 
 ---
 
@@ -64,10 +64,15 @@ The project evolves in stages so that each architectural capability can be imple
 - Typed `GET /ready` endpoint with Atlas connectivity validation.
 - Deterministic `503 Service Unavailable` readiness response.
 - MongoDB-independent API tests using mocked clients.
+- Stable nested subscriber profile response model.
+- `GET /subscribers/{subscriber_id}` lookup endpoint.
+- Deterministic `404 Not Found` and `503 Service Unavailable` responses.
+- MongoDB `_id` exclusion from the public API contract.
+- UTC-aware MongoDB reads and API timestamps.
 
 ### Planned
 
-- MongoDB-backed subscriber profile endpoints.
+- Subscriber listing with pagination and selected filters.
 - Dashboard consuming the API.
 - AWS Glue Data Catalog.
 - Amazon Athena analytical queries.
@@ -279,10 +284,18 @@ The MongoDB milestone closed with:
 95 passed
 ```
 
-The FastAPI liveness and readiness increments extend the complete suite to:
+Retrieve a subscriber profile:
+
+```powershell
+Invoke-RestMethod `
+    http://127.0.0.1:8000/subscribers/SUB_000001
+```
+
+The response contains the nested current subscriber profile, uses UTC
+timestamps, and does not expose MongoDB `_id`.
 
 ```text
-101 passed
+107 passed
 ```
 
 ---

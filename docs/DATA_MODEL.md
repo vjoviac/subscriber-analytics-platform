@@ -551,17 +551,29 @@ Profiles missing from a later snapshot are not deleted implicitly.
 
 ## 10. API resource model
 
-Potential endpoints:
+Implemented endpoints:
 
 ```text
 GET /health
 GET /ready
 GET /subscribers/{subscriber_id}
+```
+
+Planned endpoints:
+```text
 GET /subscribers
 GET /analytics/overview
 ```
 
-The API contract should not expose database-specific implementation details unless they are intentionally part of the public model.
+
+Después agrega:
+
+```markdown
+The subscriber lookup response follows the nested MongoDB serving document but
+does not expose the database-generated `_id`. All profile timestamps are
+serialized in UTC. Unknown subscribers return `404 Not Found`; database
+unavailability returns `503 Service Unavailable` without exposing internal
+connection details.
 
 ---
 

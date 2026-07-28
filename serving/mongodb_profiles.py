@@ -181,6 +181,27 @@ def get_subscriber_profiles_collection(
         collection_name
     ]
 
+def find_subscriber_profile(
+    collection: Collection,
+    subscriber_id: str,
+) -> dict[str, Any] | None:
+    normalized_subscriber_id = (
+        subscriber_id.strip()
+    )
+
+    if not normalized_subscriber_id:
+        raise MongoDBProfileError(
+            "Subscriber ID is required."
+        )
+
+    return collection.find_one(
+        {
+            "subscriber_id": normalized_subscriber_id
+        },
+        {
+            "_id": 0
+        },
+    )
 
 def ensure_subscriber_id_index(
     collection: Collection,

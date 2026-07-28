@@ -29,6 +29,7 @@ def create_mongodb_client(
         serverSelectionTimeoutMS=timeout_ms,
         connectTimeoutMS=timeout_ms,
         appname="subscriber-analytics-platform",
+        tz_aware=True,
     )
 
 

@@ -34,6 +34,9 @@ from serving.mongodb_profiles import (
     build_profile_upsert_operations,
     sync_subscriber_profiles,
 )
+from serving.mongodb_profiles import (
+    find_subscriber_profile,
+)
 
 def test_get_subscriber_profiles_collection() -> None:
     client = MagicMock()
@@ -495,3 +498,26 @@ def test_sync_subscriber_profiles_propagates_bulk_failure(
             ],
         )
 
+def test_find_subscriber_profile_excludes_mongodb_id(
+) -> None:
+    collection = MagicMock()
+    expected_profile = {
+        "subscriber_id": "SUB_000001"
+    }
+    collection.find_one.return_value = expected_profile
+
+    result = find_subscriber_profile(
+        collection,
+        "  SUB_000001  ",
+    )
+
+    assert result == expected_profile
+
+    collection.find_one.assert_called_once_with(
+        {
+            "subscriber_id": "SUB_000001"
+        },
+        {
+            "_id": 0
+        },
+    )

@@ -81,8 +81,8 @@ Operational capabilities:
 - post-write validation and synchronization reports.
 
 The latest immutable release tag remains `v0.2.3`. MongoDB Atlas synchronization
-is complete and the FastAPI milestone is in progress. Typed liveness and
-MongoDB-backed readiness endpoints are implemented and tested.
+is complete and the FastAPI milestone is in progress. Typed liveness, readiness,
+and subscriber profile lookup endpoints are implemented and tested.
 
 ---
 
@@ -276,14 +276,27 @@ Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
 - successful manual readiness validation against MongoDB Atlas;
 - 101 passing automated tests.
 
+### Completed third increment
+
+- stable nested subscriber profile response model;
+- MongoDB lookup by canonical `subscriber_id`;
+- `GET /subscribers/{subscriber_id}`;
+- MongoDB `_id` exclusion from the public contract;
+- deterministic `404 Not Found` response;
+- deterministic database `503 Service Unavailable` response;
+- UTC-aware MongoDB reads and API timestamps;
+- mocked endpoint tests without Atlas dependency;
+- successful manual lookup validation against MongoDB Atlas;
+- 107 passing automated tests.
+
 ### Next increment
 
-- stable public subscriber profile response model;
-- MongoDB lookup by canonical `subscriber_id`;
-- exclusion of MongoDB `_id` from the public contract;
-- deterministic `404 Not Found` response;
-- database failure handling without leaking internal details;
-- automated tests without Atlas dependency.
+- subscriber listing endpoint;
+- bounded page size;
+- deterministic ordering;
+- pagination metadata;
+- automated tests without Atlas dependency;
+- query-driven indexes only when justified by access patterns.
 
 ### Non-goals for the first increment
 
@@ -322,9 +335,9 @@ Transform the project from a batch pipeline into an end-to-end platform that exp
 
 - ✅ configuration;
 - ✅ database connection lifecycle;
-- ⏳ subscriber profile Pydantic models;
+- ✅ subscriber profile Pydantic models;
 - ✅ health and readiness endpoints;
-- subscriber lookup;
+- ✅ subscriber lookup;
 - subscriber listing with pagination;
 - selected filters;
 - error handling;

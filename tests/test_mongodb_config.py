@@ -66,6 +66,7 @@ def test_verify_mongodb_connection_closes_client(
         serverSelectionTimeoutMS=5000,
         connectTimeoutMS=5000,
         appname="subscriber-analytics-platform",
+        tz_aware=True,
     )
 
     client.admin.command.assert_called_once_with(
