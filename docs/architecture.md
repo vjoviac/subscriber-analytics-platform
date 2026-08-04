@@ -10,8 +10,9 @@ The architecture supports two goals:
 2. Demonstrate solution architecture decisions across data engineering, cloud storage, serving, APIs, observability, and analytics.
 
 The platform currently runs as a batch pipeline with MongoDB Atlas as its
-operational serving store. Its target state adds an API, dashboard, and
-cloud-native analytical query path.
+operational serving store and FastAPI as its typed operational interface. Its
+target state adds subscriber listing, a Snowflake analytical warehouse, Apache
+Superset dashboards, consumer applications, and automated deployment.
 
 ---
 
@@ -28,10 +29,11 @@ cloud-native analytical query path.
 - Object storage integration.
 - MongoDB Atlas serving.
 - FastAPI exposure.
-- Dashboard consumption.
+- Operational application consumption.
+- Apache Superset analytical dashboards.
 - Data quality validation.
 - Structured logging and execution reporting.
-- AWS Glue and Athena integration.
+- Snowflake integration.
 - A future streaming extension.
 
 ### Out of scope for the current phase
@@ -122,6 +124,11 @@ Validate and Transform Profiles
 Idempotent Bulk Upsert
       ↓
 MongoDB Atlas
+      ↓
+FastAPI
+      ├── GET /health
+      ├── GET /ready
+      └── GET /subscribers/{subscriber_id}
 
 Cross-cutting capabilities:
 - centralized configuration;
@@ -132,7 +139,8 @@ Cross-cutting capabilities:
 - S3 upload support;
 - atomic snapshot publication;
 - environment-based MongoDB configuration;
-- unique serving key and post-write validation.
+- unique serving key and post-write validation;
+- typed operational API models and deterministic error responses.
 ```
 
 ---
@@ -152,13 +160,13 @@ Enrichment Layer — Parquet
 Curated Layer — Hourly and Daily
       ├──────────────────────────────┐
       ▼                              ▼
-Current Subscriber Profiles         AWS Glue + Athena
+Current Subscriber Profiles         Amazon S3
       ↓                              ↓
-MongoDB Atlas                        Analytical Queries
-      ↓
-FastAPI
-      ↓
-Dashboard
+MongoDB Atlas                        Snowflake
+      ↓                              ↓
+FastAPI                              Apache Superset
+      ↓                              ↓
+Consumer Applications               Analytical Insights
 ```
 
 ---
@@ -195,7 +203,8 @@ Catalogs enrich events and should be independently maintainable.
 
 ### 6.3 Raw storage
 
-**Format:** JSONL  
+**Format:** JSONL
+
 **Partitioning:**
 
 ```text
@@ -213,7 +222,8 @@ Raw data is generated and excluded from Git.
 
 ### 6.4 Enrichment
 
-**Format:** Parquet  
+**Format:** Parquet
+
 **Partitioning:**
 
 ```text
@@ -317,24 +327,37 @@ Responsibilities:
 - isolate clients from MongoDB implementation details;
 - provide health, readiness, pagination, and OpenAPI documentation.
 
-### 6.10 Dashboard
+### 6.10 Operational consumer applications
 
 Responsibilities:
 
 - consume the API;
-- display platform and subscriber insights;
+- display or integrate current subscriber profiles;
 - demonstrate end-to-end consumption;
 - avoid direct database credentials.
 
-### 6.11 AWS analytical services
+### 6.11 Snowflake analytical warehouse
 
-Planned services:
+Responsibilities:
 
-- Amazon S3 for durable object storage.
-- AWS Glue Data Catalog for metadata.
-- Amazon Athena for serverless SQL.
-- CloudWatch or equivalent for centralized logs.
-- EventBridge, Step Functions, Glue Jobs, ECS, or MWAA as future execution options.
+- consume curated Parquet history from private Amazon S3 storage;
+- provide SQL access to historical and aggregated datasets;
+- isolate analytical workloads from MongoDB operational serving;
+- support governed schemas, transformations, and query workloads;
+- preserve Parquet in S3 as the canonical analytical output.
+
+The first Snowflake increment should use an external stage and controlled batch
+loading. Snowpipe, dynamic tables, and dbt remain optional later extensions
+that require explicit use cases.
+
+### 6.12 Apache Superset
+
+Responsibilities:
+
+- query Snowflake through a controlled analytical connection;
+- display historical trends, KPIs, and aggregated insights;
+- support interactive exploration without querying MongoDB;
+- avoid embedding database credentials in public client code.
 
 ---
 
@@ -529,11 +552,11 @@ A failed run must:
 The current implementation favors clarity. It can evolve by:
 
 - replacing local files with S3;
-- replacing in-process transformations with Spark or Glue;
+- replacing in-process transformations with a distributed execution engine;
 - parallelizing independent hourly partitions;
 - compacting small files;
-- registering schemas in Glue;
-- querying with Athena;
+- loading curated history into Snowflake;
+- scaling Snowflake compute independently for analytical workloads;
 - using bulk writes for MongoDB;
 - introducing incremental profile updates when history becomes large.
 
@@ -566,11 +589,13 @@ S3 upload, environment configuration, and least-privilege IAM.
 ### Stage 3 — Operational serving
 
 MongoDB Atlas synchronization is implemented using the completed
-current-profile snapshot. FastAPI and dashboard consumption remain planned.
+current-profile snapshot. FastAPI liveness, readiness, and subscriber lookup
+are implemented; listing and consumer applications remain planned.
 
 ### Stage 4 — Cloud analytics
 
-Glue Data Catalog, Athena, analytical examples, and optional Snowflake evaluation.
+Snowflake loading, analytical models, reconciled SQL examples, and Apache
+Superset dashboards.
 
 ### Stage 5 — Managed execution
 
@@ -584,7 +609,10 @@ Containers, scheduling, centralized logs, CI/CD, infrastructure as code, and opt
 - Storage code does not implement business aggregation.
 - Analytics code does not contain credentials.
 - API code does not read raw files.
-- Dashboard code does not connect directly to MongoDB.
+- Operational consumer applications use FastAPI and do not connect directly to MongoDB.
+- Apache Superset connects to Snowflake and does not use MongoDB or FastAPI as
+  an analytical query engine.
+- Snowflake does not replace the canonical Parquet history in Amazon S3.
 - MongoDB does not replace Parquet history.
 - The orchestrator coordinates but does not duplicate transformations.
 - Configuration modules do not perform pipeline work.

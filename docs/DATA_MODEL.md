@@ -562,13 +562,8 @@ GET /subscribers/{subscriber_id}
 Planned endpoints:
 ```text
 GET /subscribers
-GET /analytics/overview
 ```
 
-
-Después agrega:
-
-```markdown
 The subscriber lookup response follows the nested MongoDB serving document but
 does not expose the database-generated `_id`. All profile timestamps are
 serialized in UTC. Unknown subscribers return `404 Not Found`; database
@@ -576,6 +571,10 @@ unavailability returns `503 Service Unavailable` without exposing internal
 connection details.
 
 ---
+
+Analytical datasets are consumed separately through Snowflake and Apache
+Superset. Broad historical aggregations are not added to FastAPI without a
+defined operational requirement.
 
 ## 11. Schema evolution
 

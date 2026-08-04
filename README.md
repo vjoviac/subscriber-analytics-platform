@@ -4,7 +4,7 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
-> **Current release:** `v0.2.3`  
+> **Current release:** `v0.2.3`<br>
 > **Current focus:** incremental FastAPI subscriber profile service development.<br>
 > **Current API increment:** MongoDB-backed subscriber profile lookup.
 
@@ -73,9 +73,9 @@ The project evolves in stages so that each architectural capability can be imple
 ### Planned
 
 - Subscriber listing with pagination and selected filters.
-- Dashboard consuming the API.
-- AWS Glue Data Catalog.
-- Amazon Athena analytical queries.
+- Snowflake analytical warehouse consuming curated Parquet history from Amazon S3.
+- Apache Superset dashboards querying Snowflake.
+- Consumer applications using the operational FastAPI contract.
 - Containerization and deployment automation.
 - Optional streaming ingestion path.
 - Advanced analytical and AI-assisted use cases.
@@ -93,18 +93,15 @@ Enrichment Layer — Parquet
       ↓
 Hourly Curated Dataset
       ↓
-Daily Curated Dataset
+Daily Curated Dataset ──────────────→ Amazon S3
+      ↓                                  ↓
+Current Subscriber Profiles           Snowflake
+      ↓                                  ↓
+MongoDB Atlas                        Apache Superset
+      ↓                                  ↓
+FastAPI                           Analytical Insights
       ↓
-Current Subscriber Profiles
-      ↓
-MongoDB Atlas
-      ↓
-FastAPI
-      ↓
-Dashboard
-
-Analytical extension:
-Curated Parquet → Amazon S3 → AWS Glue → Amazon Athena
+Consumer Applications
 ```
 
 For the complete design, see [Architecture](docs/ARCHITECTURE.md).
@@ -121,7 +118,9 @@ For the complete design, see [Architecture](docs/ARCHITECTURE.md).
 | Curated daily | Parquet | Subscriber activity by daily window |
 | Current profiles | Parquet / MongoDB | Latest subscriber state plus historical metrics |
 | Serving | MongoDB Atlas | Low-latency application access |
-| API | JSON over HTTP | Controlled access for dashboards and clients |
+| API | JSON over HTTP | Controlled access for operational applications |
+| Analytical warehouse | Snowflake | Historical and aggregated SQL analytics |
+| Presentation | Apache Superset | Dashboards, KPIs, and data exploration |
 
 ---
 
@@ -284,15 +283,7 @@ The MongoDB milestone closed with:
 95 passed
 ```
 
-Retrieve a subscriber profile:
-
-```powershell
-Invoke-RestMethod `
-    http://127.0.0.1:8000/subscribers/SUB_000001
-```
-
-The response contains the nested current subscriber profile, uses UTC
-timestamps, and does not expose MongoDB `_id`.
+The current development suite extends to:
 
 ```text
 107 passed
@@ -307,6 +298,16 @@ Start the local development server from the repository root:
 ```bash
 python -m uvicorn api.app:app --reload
 ```
+
+Retrieve a subscriber profile:
+
+```powershell
+Invoke-RestMethod `
+    http://127.0.0.1:8000/subscribers/SUB_000001
+```
+
+The response contains the nested current subscriber profile, uses UTC
+timestamps, and does not expose MongoDB `_id`.
 
 Check API liveness:
 
@@ -449,7 +450,8 @@ Existing Git tags are immutable and are never reused.
 ## Project status
 
 Release `v0.2.3` remains the latest immutable tag. Current development adds the
-MongoDB Atlas serving synchronization to that reliable batch foundation:
+MongoDB Atlas serving synchronization and the initial operational FastAPI
+contract to that reliable batch foundation:
 
 ```text
 Raw JSONL
@@ -463,16 +465,16 @@ Daily Curated Parquet
 Current Subscriber Profiles
     ↓
 MongoDB Atlas
-```
-
-The next architectural milestone exposes the serving data through an application contract:
-
-```text
-MongoDB Atlas
     ↓
 FastAPI
-    ↓
-Dashboard
+```
+
+The next FastAPI increment adds subscriber listing with bounded pagination.
+The target consumption architecture then separates two workloads:
+
+```text
+Operational: MongoDB Atlas → FastAPI → Consumer Applications
+Analytical:  Amazon S3 → Snowflake → Apache Superset
 ```
 
 See [Roadmap](docs/ROADMAP.md) for the delivery sequence.

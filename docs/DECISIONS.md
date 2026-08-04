@@ -34,7 +34,11 @@ Raw
 → Current Profiles
 → Serving
 → API
-→ Dashboard
+→ Operational Consumers
+
+Curated
+→ Analytical Warehouse
+→ Analytical Presentation
 ```
 
 ### Rationale
@@ -87,7 +91,7 @@ Write enriched and curated datasets as Parquet.
 - typed columnar schema;
 - compression;
 - efficient analytical projection;
-- compatibility with pandas, Spark, Athena, and Snowflake.
+- compatibility with pandas, Spark, and Snowflake.
 
 ### Consequences
 
@@ -441,7 +445,7 @@ Write to a temporary file and replace the final snapshot only after validation.
 
 ## ADR-018 — Implement MongoDB before Athena
 
-**Status:** Accepted
+**Status:** Superseded by ADR-031
 
 ### Decision
 
@@ -493,7 +497,7 @@ Store current profiles in MongoDB and preserve historical layers in file-based s
 
 ## ADR-020 — Require the dashboard to consume FastAPI
 
-**Status:** Proposed
+**Status:** Superseded by ADR-031
 
 ### Decision
 
@@ -626,7 +630,8 @@ Treat Git tags as immutable and increment patch or minor versions for later rele
 
 ### Decision
 
-Prioritize current profiles, MongoDB, FastAPI, and dashboard before Step Functions, Airflow, or equivalent managed orchestration.
+Prioritize current profiles, MongoDB, FastAPI, Snowflake, and Apache Superset
+before Step Functions, Airflow, or equivalent managed orchestration.
 
 ### Rationale
 
@@ -756,6 +761,54 @@ last_activity_at  = max(window_start)
 
 - tests and documentation treat `window_end` as exclusive;
 - existing snapshots and MongoDB documents must be rebuilt and synchronized.
+
+---
+
+## ADR-031 — Separate operational and analytical consumption paths
+
+**Status:** Accepted
+
+### Context
+
+Current subscriber profile lookup and historical analytical exploration have
+different access patterns. Forcing both through FastAPI or MongoDB would blur
+the serving boundary, while adding Snowflake alongside Glue and Athena would
+duplicate analytical responsibilities without a defined requirement.
+
+### Decision
+
+Use two purpose-built consumption paths:
+
+```text
+Operational:
+Current Profiles → MongoDB Atlas → FastAPI → Consumer Applications
+
+Analytical:
+Curated Parquet in Amazon S3 → Snowflake → Apache Superset
+```
+
+Snowflake replaces the previously planned Glue/Athena query layer. Apache
+Superset queries Snowflake directly for historical trends, KPIs, and
+exploration. FastAPI remains the controlled interface for operational
+subscriber access. Parquet in Amazon S3 remains the canonical analytical
+output.
+
+### Rationale
+
+- assigns each technology to a clear workload;
+- prevents analytical scans from affecting operational profile serving;
+- uses Snowflake for governed SQL analytics and independent compute;
+- uses Superset for analytical visualization;
+- preserves MongoDB and FastAPI for low-latency operational access;
+- avoids adding overlapping cloud query engines for architectural decoration.
+
+### Consequences
+
+- Snowflake loading and reconciliation become a separate milestone;
+- Superset depends on the Snowflake analytical contract;
+- operational consumer applications depend on FastAPI;
+- two access paths require separate credentials and deployment controls;
+- Glue and Athena are removed from the committed target architecture.
 
 ---
 

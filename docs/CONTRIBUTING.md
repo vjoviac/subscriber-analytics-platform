@@ -139,7 +139,9 @@ FastAPI application and API models.
 
 ### `dashboards/`
 
-Presentation code that consumes the API.
+Apache Superset assets, dashboard exports, or supporting analytical
+presentation configuration. Superset queries Snowflake; operational consumer
+applications use FastAPI.
 
 ### `tests/`
 

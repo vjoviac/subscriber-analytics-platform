@@ -41,9 +41,19 @@ Current subscriber profiles
           ↓
 Synchronize MongoDB Atlas — implemented
           ↓
-Serve through FastAPI — planned
+Serve through FastAPI — lookup implemented
           ↓
-Consume from dashboard
+Consumer applications — planned
+```
+
+Analytical extension:
+
+```text
+Curated Parquet in Amazon S3
+          ↓
+Load into Snowflake — planned
+          ↓
+Query and visualize with Apache Superset — planned
 ```
 
 ---
@@ -465,16 +475,20 @@ source snapshot. Full replacement remains an explicit future capability.
 
 ---
 
-## 13. Planned stage — FastAPI
+## 13. Stage 9 — FastAPI service
 
-Recommended endpoints:
+Implemented endpoints:
 
 ```text
 GET /health
 GET /ready
 GET /subscribers/{subscriber_id}
+```
+
+Next endpoint:
+
+```text
 GET /subscribers
-GET /analytics/overview
 ```
 
 Requirements:
@@ -671,8 +685,9 @@ Tests should use deterministic data and temporary directories. AWS or MongoDB de
 The MongoDB unit suite mocks external connectivity and covers configuration,
 connection cleanup, snapshot validation, BSON conversion, index creation,
 operation construction, bulk-write reporting, failure propagation, and script
-orchestration. The full automated suite contained 95 passing tests at milestone
-completion.
+orchestration. The MongoDB milestone closed with 95 passing tests. The current
+suite contains 107 passing tests after the implemented FastAPI liveness,
+readiness, and subscriber lookup increments.
 
 ---
 
@@ -691,7 +706,6 @@ Manual command execution.
 
 - Amazon EventBridge Scheduler;
 - AWS Step Functions;
-- AWS Glue Workflows;
 - Amazon MWAA;
 - scheduled ECS task.
 

@@ -16,6 +16,7 @@
 | Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas |
 | Next Deliverable | FastAPI subscriber listing with pagination |
 | Serving Path | MongoDB Atlas with FastAPI liveness, readiness, and subscriber lookup implemented |
+| Analytical Path | Curated Parquet → Amazon S3 → Snowflake → Apache Superset planned |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
 | Architectural Style | Layered Batch Pipeline |
@@ -84,8 +85,9 @@ Current version: **v0.2.3**
 ## Planned milestones
 
 1. FastAPI — in progress
-2. Dashboard
-3. AWS Glue / Athena
+2. Snowflake analytical warehouse
+3. Apache Superset analytical dashboards
+4. Containerization and deployment automation
 
 ---
 
@@ -115,13 +117,15 @@ Enriched Parquet
     ↓
 Curated Hourly
     ↓
-Curated Daily
+Curated Daily ───────────────→ Amazon S3
+    ↓                              ↓ planned
+Current Subscriber Profiles     Snowflake
+    ↓                              ↓
+MongoDB Atlas                  Apache Superset
     ↓
-Current Subscriber Profiles
-    ↓
-MongoDB Atlas
+FastAPI
     ↓ planned
-FastAPI → Dashboard
+Consumer Applications
 ```
 
 Design principles:
@@ -154,8 +158,11 @@ Design principles:
 
 ## Architecture
 
-- FastAPI is the only public interface.
+- FastAPI is the controlled interface for operational subscriber access.
 - MongoDB is the serving database.
+- Apache Superset will query Snowflake, not MongoDB or FastAPI.
+- Snowflake will serve historical and aggregated analytics without replacing
+  canonical Parquet datasets in S3.
 - UTC everywhere.
 - One subscriber profile per subscriber.
 - Atomic snapshot writes.
@@ -209,8 +216,9 @@ Semantic Versioning:
 | ✅ | subscriber_profiles_current |
 | ✅ | MongoDB Atlas profile synchronization |
 | 🚧 | FastAPI — liveness, readiness, and subscriber lookup implemented |
-| ⏳ | Dashboard |
-| ⏳ | Glue / Athena |
+| ⏳ | Snowflake analytical warehouse |
+| ⏳ | Apache Superset analytical dashboards |
+| ⏳ | Containerization and deployment automation |
 
 ---
 
@@ -289,8 +297,14 @@ unknown subscribers, and returns `503 Service Unavailable` without exposing
 internal database details.
 
 The next increment will implement subscriber listing with bounded pagination.
-Selected filters remain deferred until concrete dashboard requirements define
-the access patterns and required indexes.
+Selected filters remain deferred until concrete operational consumer
+requirements define the access patterns and required indexes.
+
+After the operational API contract is complete, the analytical path will load
+curated Parquet history from Amazon S3 into Snowflake. Apache Superset will
+query Snowflake for historical trends, KPIs, and exploration. This path remains
+separate from MongoDB Atlas and FastAPI, which serve current subscriber
+profiles and operational consumers.
 
 ---
 

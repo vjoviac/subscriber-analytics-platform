@@ -344,15 +344,11 @@ Transform the project from a batch pipeline into an end-to-end platform that exp
 - OpenAPI documentation;
 - tests.
 
-#### Dashboard
+#### Operational consumer applications
 
-- API-based data access;
-- platform overview;
-- subscriber profile lookup;
-- usage and quality metrics;
-- filters;
-- loading and error states;
-- demonstration instructions or screenshots.
+Operational consumer applications remain optional until a concrete user
+experience is defined. Any such application must use FastAPI and must not
+connect directly to MongoDB.
 
 ### Exit criteria
 
@@ -362,36 +358,40 @@ An evaluator can:
 2. build current profiles;
 3. load MongoDB;
 4. start FastAPI;
-5. open the dashboard;
-6. retrieve and visualize a subscriber profile.
+5. retrieve a subscriber profile;
+6. list subscribers with bounded pagination.
 
 ### Release narrative
 
 ```text
 Subscriber Analytics Platform v0.3.0 adds an operational serving
 layer and exposes curated subscriber insights through MongoDB Atlas,
-FastAPI, and a dashboard.
+FastAPI, and stable operational contracts.
 ```
 
 ---
 
-## 7. v0.4.0 — AWS analytical query layer
+## 7. v0.4.0 — Snowflake analytical warehouse and Superset
 
 ### Objective
 
-Provide serverless SQL access to curated datasets in S3.
+Provide governed SQL analytics over curated history in Amazon S3 and visualize
+the results through Apache Superset.
 
 ### Deliverables
 
 - standardized S3 prefixes;
 - curated dataset uploads;
-- Glue database;
-- Glue tables or crawlers;
-- verified Parquet schemas;
-- partition registration;
-- Athena workgroup;
-- cost controls;
-- example SQL;
+- secure Snowflake storage integration;
+- external stage and Parquet file format;
+- controlled batch loading into Snowflake tables;
+- analytical schemas and documented grains;
+- reconciliation with canonical Parquet outputs;
+- example analytical SQL;
+- warehouse sizing and cost controls;
+- Apache Superset connection to Snowflake;
+- dashboard KPIs, filters, and analytical views;
+- loading, error, and demonstration guidance;
 - security documentation;
 - analytical use cases.
 
@@ -408,11 +408,15 @@ Provide serverless SQL access to curated datasets in S3.
 
 ### Exit criteria
 
-- Athena queries curated data;
-- partition pruning is demonstrated;
-- results reconcile with local outputs;
+- Snowflake loads and queries curated data;
+- loaded row counts and metrics reconcile with local outputs;
+- Superset displays validated analytical results;
 - no raw public access;
 - SQL examples are committed.
+
+Snowpipe, dynamic tables, and dbt are optional follow-up capabilities. They
+should be introduced only when automation or transformation requirements
+justify them.
 
 ---
 
@@ -429,7 +433,7 @@ Make the platform reproducible beyond the developer workstation.
 - dependency locking;
 - GitHub Actions for lint, tests, build, and security checks;
 - environment-specific configuration;
-- API and dashboard deployment;
+- API and Apache Superset deployment;
 - scheduled pipeline execution;
 - centralized logs;
 - release workflow;
@@ -488,7 +492,7 @@ Raw Object Storage
     ↓
 Near-real-time Aggregates
     ↓
-MongoDB / API / Dashboard
+MongoDB / API / Consumers
 ```
 
 ### Candidate deliverables
@@ -546,7 +550,8 @@ Deliver a stable, documented, reproducible release suitable for portfolio demons
 - local and deployed demonstration paths;
 - operational serving;
 - API;
-- dashboard;
+- Snowflake analytical warehouse;
+- Apache Superset dashboard;
 - cloud analytics;
 - versioned releases;
 - screenshots;
@@ -562,8 +567,8 @@ Deliver a stable, documented, reproducible release suitable for portfolio demons
 5. Show validation and reports.
 6. Build current profiles.
 7. Retrieve a profile through the API.
-8. Show dashboard insights.
-9. Run an Athena query.
+8. Run a Snowflake analytical query.
+9. Show the corresponding Apache Superset insights.
 10. Explain the scale-out path.
 
 ---
@@ -586,7 +591,6 @@ Potential future items:
 - caching;
 - OpenTelemetry;
 - disaster recovery;
-- Snowflake ingestion;
 - dbt transformations;
 - Airflow orchestration;
 - converged mobile and fixed analytics.
