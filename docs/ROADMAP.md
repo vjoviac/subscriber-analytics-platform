@@ -81,10 +81,9 @@ Operational capabilities:
 - post-write validation and synchronization reports.
 
 MongoDB Atlas synchronization and FastAPI operational serving scopes are
-complete in development. Typed
+complete in `v0.3.0`. Typed
 liveness, readiness, subscriber profile lookup, and bounded listing endpoints
-are implemented and tested. The latest immutable tag remains `v0.2.3` until
-the serving release checkpoint is committed and tagged.
+are implemented and tested. The latest immutable release tag is `v0.3.0`.
 
 ---
 
@@ -241,7 +240,7 @@ The profile activity-date contract was also corrected so
 
 ## 5.1 FastAPI milestone
 
-**Status:** Completed in development; release checkpoint pending.
+**Status:** Completed in `v0.3.0`.
 
 ### Objective
 
@@ -304,11 +303,10 @@ Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
 - successful manual pagination validation against MongoDB Atlas with two profiles;
 - 117 passing automated tests.
 
-### Next checkpoint
+### Deferred scope
 
 - retain selected filters as deferred until consumer access patterns are defined;
-- commit the completed serving increment and prepare the immutable `v0.3.0`
-  release checkpoint without starting the analytical or deployment milestones.
+- add query-driven indexes only when those access patterns justify them.
 
 ### Non-goals for the milestone
 
@@ -319,6 +317,8 @@ Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
 ---
 
 ## 6. v0.3.0 — Serving layer and application path
+
+**Status:** Completed release.
 
 ### Objective
 

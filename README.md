@@ -4,9 +4,9 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
-> **Current release:** `v0.2.3`<br>
-> **Current focus:** FastAPI serving release checkpoint preparation.<br>
-> **Current API increment:** bounded subscriber listing completed and validated against MongoDB Atlas.
+> **Current release:** `v0.3.0`<br>
+> **Current focus:** completed MongoDB Atlas and FastAPI operational serving path.<br>
+> **Next milestone:** Snowflake analytical warehouse.
 
 ---
 
@@ -464,9 +464,8 @@ Existing Git tags are immutable and are never reused.
 
 ## Project status
 
-Release `v0.2.3` remains the latest immutable tag. Current development adds the
-MongoDB Atlas serving synchronization and the initial operational FastAPI
-contract to that reliable batch foundation:
+Release `v0.3.0` adds the MongoDB Atlas operational serving layer and a typed
+FastAPI contract to the reliable batch foundation:
 
 ```text
 Raw JSONL

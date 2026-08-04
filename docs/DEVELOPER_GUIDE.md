@@ -9,12 +9,12 @@
 
 | Item | Value |
 |------|-------|
-| Current Version | v0.2.3 |
-| Current Git Tag | v0.2.3 |
+| Current Version | v0.3.0 |
+| Current Git Tag | v0.3.0 |
 | Primary Branch | main |
 | Completed Milestone | FastAPI operational serving contract |
 | Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas → FastAPI |
-| Next Deliverable | Commit and prepare the v0.3.0 serving release checkpoint |
+| Next Deliverable | Snowflake analytical warehouse foundation |
 | Serving Path | MongoDB Atlas with FastAPI liveness, readiness, subscriber lookup, and bounded listing implemented |
 | Analytical Path | Curated Parquet → Amazon S3 → Snowflake → Apache Superset planned |
 | Primary Language | Python |
@@ -28,7 +28,7 @@
 
 The Subscriber Analytics Platform is a portfolio project that simulates a production-grade telecommunications analytics platform. The objective is to demonstrate sound engineering and architectural practices rather than simply producing code.
 
-Current version: **v0.2.3**
+Current version: **v0.3.0**
 
 ---
 
@@ -83,7 +83,7 @@ Current version: **v0.2.3**
 - Typed pagination metadata
 - Mocked subscriber-listing tests without Atlas dependency
 - Successful manual subscriber-listing validation against MongoDB Atlas
-- 117 passing automated tests in current development
+- 117 passing automated tests in the v0.3.0 release
 
 ## Completed milestone
 
