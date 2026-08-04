@@ -203,6 +203,35 @@ def find_subscriber_profile(
         },
     )
 
+def count_subscriber_profiles(
+    collection: Collection,
+) -> int:
+    return collection.count_documents({})
+
+
+def find_subscriber_profiles_page(
+    collection: Collection,
+    page: int,
+    page_size: int,
+) -> list[dict[str, Any]]:
+    offset = (page - 1) * page_size
+
+    cursor = collection.find(
+        {},
+        {
+            "_id": 0
+        },
+    )
+
+    return list(
+        cursor.sort(
+            "subscriber_id",
+            ASCENDING,
+        )
+        .skip(offset)
+        .limit(page_size)
+    )
+
 def ensure_subscriber_id_index(
     collection: Collection,
 ) -> str:

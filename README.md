@@ -5,8 +5,8 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
 > **Current release:** `v0.2.3`<br>
-> **Current focus:** incremental FastAPI subscriber profile service development.<br>
-> **Current API increment:** MongoDB-backed subscriber profile lookup.
+> **Current focus:** FastAPI serving release checkpoint preparation.<br>
+> **Current API increment:** bounded subscriber listing completed and validated against MongoDB Atlas.
 
 ---
 
@@ -69,10 +69,14 @@ The project evolves in stages so that each architectural capability can be imple
 - Deterministic `404 Not Found` and `503 Service Unavailable` responses.
 - MongoDB `_id` exclusion from the public API contract.
 - UTC-aware MongoDB reads and API timestamps.
+- `GET /subscribers` listing endpoint.
+- Bounded page size and deterministic `subscriber_id` ordering.
+- Pagination metadata for operational consumers.
+- Successful manual pagination validation against MongoDB Atlas with two profiles.
 
 ### Planned
 
-- Subscriber listing with pagination and selected filters.
+- Selected operational filters after concrete consumer requirements are defined.
 - Snowflake analytical warehouse consuming curated Parquet history from Amazon S3.
 - Apache Superset dashboards querying Snowflake.
 - Consumer applications using the operational FastAPI contract.
@@ -286,7 +290,7 @@ The MongoDB milestone closed with:
 The current development suite extends to:
 
 ```text
-107 passed
+117 passed
 ```
 
 ---
@@ -308,6 +312,17 @@ Invoke-RestMethod `
 
 The response contains the nested current subscriber profile, uses UTC
 timestamps, and does not expose MongoDB `_id`.
+
+List subscriber profiles with bounded pagination:
+
+```powershell
+Invoke-RestMethod `
+    "http://127.0.0.1:8000/subscribers?page=1&page_size=20"
+```
+
+The listing is ordered by `subscriber_id`, accepts page sizes from 1 through
+100, and includes the current page, page size, total profile count, and total
+page count.
 
 Check API liveness:
 
@@ -469,8 +484,11 @@ MongoDB Atlas
 FastAPI
 ```
 
-The next FastAPI increment adds subscriber listing with bounded pagination.
-The target consumption architecture then separates two workloads:
+FastAPI now supports bounded subscriber listing for future operational
+consumer applications. Selected filters remain deferred until their access
+patterns are defined. The listing was validated against MongoDB Atlas with
+deterministic ordering across two pages and an empty result beyond the final
+page. The target consumption architecture separates two workloads:
 
 ```text
 Operational: MongoDB Atlas → FastAPI → Consumer Applications

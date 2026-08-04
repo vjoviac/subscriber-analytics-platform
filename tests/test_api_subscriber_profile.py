@@ -261,3 +261,219 @@ def test_subscriber_profile_endpoint_is_documented_in_openapi(
     ]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/ErrorResponse"
     }
+
+def test_list_subscriber_profiles_returns_page(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+    mongodb_client: MagicMock,
+) -> None:
+    collection = MagicMock()
+
+    get_collection = MagicMock(
+        return_value=collection
+    )
+    count_profiles = MagicMock(
+        return_value=5
+    )
+    find_profiles = MagicMock(
+        return_value=[
+            build_subscriber_profile_document()
+        ]
+    )
+
+    monkeypatch.setattr(
+        "api.app.get_subscriber_profiles_collection",
+        get_collection,
+    )
+    monkeypatch.setattr(
+        "api.app.count_subscriber_profiles",
+        count_profiles,
+    )
+    monkeypatch.setattr(
+        "api.app.find_subscriber_profiles_page",
+        find_profiles,
+    )
+
+    response = client.get(
+        "/subscribers?page=2&page_size=2"
+    )
+
+    assert response.status_code == 200
+
+    response_body = response.json()
+
+    assert len(response_body["items"]) == 1
+    assert response_body["items"][0][
+        "subscriber_id"
+    ] == "SUB_000001"
+    assert "_id" not in response_body[
+        "items"
+    ][0]
+
+    assert response_body["pagination"] == {
+        "page": 2,
+        "page_size": 2,
+        "total_items": 5,
+        "total_pages": 3,
+    }
+
+    get_collection.assert_called_once_with(
+        mongodb_client
+    )
+    count_profiles.assert_called_once_with(
+        collection
+    )
+    find_profiles.assert_called_once_with(
+        collection,
+        2,
+        2,
+    )
+
+def test_list_subscriber_profiles_uses_defaults_for_empty_collection(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+) -> None:
+    collection = MagicMock()
+
+    monkeypatch.setattr(
+        "api.app.get_subscriber_profiles_collection",
+        MagicMock(
+            return_value=collection
+        ),
+    )
+    monkeypatch.setattr(
+        "api.app.count_subscriber_profiles",
+        MagicMock(
+            return_value=0
+        ),
+    )
+
+    find_profiles = MagicMock(
+        return_value=[]
+    )
+    monkeypatch.setattr(
+        "api.app.find_subscriber_profiles_page",
+        find_profiles,
+    )
+
+    response = client.get(
+        "/subscribers"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "pagination": {
+            "page": 1,
+            "page_size": 20,
+            "total_items": 0,
+            "total_pages": 0,
+        },
+    }
+
+    find_profiles.assert_called_once_with(
+        collection,
+        1,
+        20,
+    )
+
+@pytest.mark.parametrize(
+    "query_string",
+    [
+        "page=0",
+        "page_size=0",
+        "page_size=101",
+    ],
+)
+def test_list_subscriber_profiles_rejects_invalid_pagination(
+    client: TestClient,
+    query_string: str,
+) -> None:
+    response = client.get(
+        f"/subscribers?{query_string}"
+    )
+
+    assert response.status_code == 422
+
+def test_list_subscriber_profiles_returns_unavailable_without_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "api.app.create_mongodb_client",
+        MagicMock(
+            side_effect=MongoDBConfigurationError(
+                "MONGODB_URI is required."
+            )
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/subscribers"
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": (
+            "Subscriber profile service is unavailable."
+        )
+    }
+
+
+def test_list_subscriber_profiles_handles_database_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+) -> None:
+    monkeypatch.setattr(
+        "api.app.get_subscriber_profiles_collection",
+        MagicMock(
+            return_value=MagicMock()
+        ),
+    )
+    monkeypatch.setattr(
+        "api.app.count_subscriber_profiles",
+        MagicMock(
+            side_effect=ServerSelectionTimeoutError(
+                "Simulated MongoDB timeout"
+            )
+        ),
+    )
+
+    response = client.get(
+        "/subscribers"
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": (
+            "Subscriber profile service is unavailable."
+        )
+    }
+
+def test_subscriber_listing_endpoint_is_documented_in_openapi(
+    client: TestClient,
+) -> None:
+    openapi_schema = client.app.openapi()
+
+    operation = openapi_schema["paths"][
+        "/subscribers"
+    ]["get"]
+
+    assert operation["summary"] == (
+        "List subscriber profiles"
+    )
+
+    assert operation["responses"]["200"][
+        "content"
+    ]["application/json"]["schema"] == {
+        "$ref": (
+            "#/components/schemas/"
+            "SubscriberProfileListResponse"
+        )
+    }
+
+    assert operation["responses"]["503"][
+        "content"
+    ]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ErrorResponse"
+    }

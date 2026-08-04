@@ -35,7 +35,9 @@ from serving.mongodb_profiles import (
     sync_subscriber_profiles,
 )
 from serving.mongodb_profiles import (
+    count_subscriber_profiles,
     find_subscriber_profile,
+    find_subscriber_profiles_page,
 )
 
 def test_get_subscriber_profiles_collection() -> None:
@@ -521,3 +523,68 @@ def test_find_subscriber_profile_excludes_mongodb_id(
             "_id": 0
         },
     )
+
+def test_count_subscriber_profiles_counts_all_documents(
+) -> None:
+    collection = MagicMock()
+    collection.count_documents.return_value = 42
+
+    result = count_subscriber_profiles(
+        collection
+    )
+
+    assert result == 42
+
+    collection.count_documents.assert_called_once_with(
+        {}
+    )
+
+
+def test_find_subscriber_profiles_page_is_ordered_and_bounded(
+) -> None:
+    collection = MagicMock()
+
+    cursor = collection.find.return_value
+    sorted_cursor = cursor.sort.return_value
+    skipped_cursor = sorted_cursor.skip.return_value
+    limited_cursor = skipped_cursor.limit.return_value
+
+    limited_cursor.__iter__.return_value = iter(
+        [
+            {
+                "subscriber_id": "SUB_000003"
+            },
+            {
+                "subscriber_id": "SUB_000004"
+            },
+        ]
+    )
+
+    result = find_subscriber_profiles_page(
+        collection,
+        page=2,
+        page_size=2,
+    )
+
+    assert result == [
+        {
+            "subscriber_id": "SUB_000003"
+        },
+        {
+            "subscriber_id": "SUB_000004"
+        },
+    ]
+
+    collection.find.assert_called_once_with(
+        {},
+        {
+            "_id": 0
+        },
+    )
+
+    cursor.sort.assert_called_once_with(
+        "subscriber_id",
+        ASCENDING,
+    )
+    sorted_cursor.skip.assert_called_once_with(2)
+    skipped_cursor.limit.assert_called_once_with(2)

@@ -557,10 +557,6 @@ Implemented endpoints:
 GET /health
 GET /ready
 GET /subscribers/{subscriber_id}
-```
-
-Planned endpoints:
-```text
 GET /subscribers
 ```
 
@@ -569,6 +565,13 @@ does not expose the database-generated `_id`. All profile timestamps are
 serialized in UTC. Unknown subscribers return `404 Not Found`; database
 unavailability returns `503 Service Unavailable` without exposing internal
 connection details.
+
+The listing endpoint uses one-based `page` values and a `page_size` bounded
+from 1 through 100. Results are ordered by the unique top-level
+`subscriber_id` in ascending order. Its response contains profile `items` and
+pagination metadata with `page`, `page_size`, `total_items`, and `total_pages`.
+MongoDB `_id` remains excluded. A valid page beyond the available profiles
+returns an empty `items` list rather than `404 Not Found`.
 
 ---
 

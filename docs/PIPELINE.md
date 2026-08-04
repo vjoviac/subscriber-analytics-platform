@@ -41,7 +41,7 @@ Current subscriber profiles
           ↓
 Synchronize MongoDB Atlas — implemented
           ↓
-Serve through FastAPI — lookup implemented
+Serve through FastAPI — lookup and bounded listing implemented
           ↓
 Consumer applications — planned
 ```
@@ -483,19 +483,16 @@ Implemented endpoints:
 GET /health
 GET /ready
 GET /subscribers/{subscriber_id}
-```
-
-Next endpoint:
-
-```text
 GET /subscribers
 ```
 
-Requirements:
+Implemented listing contract:
 
 - typed request and response models;
-- pagination;
-- bounded page size;
+- one-based pagination;
+- page size bounded from 1 through 100;
+- deterministic ascending `subscriber_id` ordering;
+- total item and page counts;
 - meaningful HTTP status codes;
 - database timeout handling;
 - OpenAPI documentation.
@@ -686,8 +683,10 @@ The MongoDB unit suite mocks external connectivity and covers configuration,
 connection cleanup, snapshot validation, BSON conversion, index creation,
 operation construction, bulk-write reporting, failure propagation, and script
 orchestration. The MongoDB milestone closed with 95 passing tests. The current
-suite contains 107 passing tests after the implemented FastAPI liveness,
-readiness, and subscriber lookup increments.
+suite contains 117 passing tests after the implemented FastAPI liveness,
+readiness, subscriber lookup, and bounded subscriber listing increments.
+Manual validation against MongoDB Atlas confirmed deterministic pagination over
+two profiles and an empty item list for a valid page beyond the available data.
 
 ---
 

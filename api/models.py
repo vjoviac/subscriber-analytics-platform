@@ -54,6 +54,17 @@ class SubscriberProfileResponse(BaseModel):
     activity: ActivityMetrics
     metadata: ProfileMetadata
 
+class PaginationMetadata(BaseModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+
+
+class SubscriberProfileListResponse(BaseModel):
+    items: list[SubscriberProfileResponse]
+    pagination: PaginationMetadata
+
 class ErrorResponse(BaseModel):
     detail: str
 

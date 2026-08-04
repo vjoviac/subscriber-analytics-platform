@@ -10,9 +10,10 @@ The architecture supports two goals:
 2. Demonstrate solution architecture decisions across data engineering, cloud storage, serving, APIs, observability, and analytics.
 
 The platform currently runs as a batch pipeline with MongoDB Atlas as its
-operational serving store and FastAPI as its typed operational interface. Its
-target state adds subscriber listing, a Snowflake analytical warehouse, Apache
-Superset dashboards, consumer applications, and automated deployment.
+operational serving store and FastAPI as its typed operational interface.
+FastAPI supports subscriber lookup and bounded subscriber listing. The target
+state adds a Snowflake analytical warehouse, Apache Superset dashboards,
+consumer applications, and automated deployment.
 
 ---
 

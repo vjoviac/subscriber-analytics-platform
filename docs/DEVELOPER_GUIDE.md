@@ -12,10 +12,10 @@
 | Current Version | v0.2.3 |
 | Current Git Tag | v0.2.3 |
 | Primary Branch | main |
-| Completed Milestone | MongoDB Atlas profile synchronization |
-| Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas |
-| Next Deliverable | FastAPI subscriber listing with pagination |
-| Serving Path | MongoDB Atlas with FastAPI liveness, readiness, and subscriber lookup implemented |
+| Completed Milestone | FastAPI operational serving contract |
+| Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas → FastAPI |
+| Next Deliverable | Commit and prepare the v0.3.0 serving release checkpoint |
+| Serving Path | MongoDB Atlas with FastAPI liveness, readiness, subscriber lookup, and bounded listing implemented |
 | Analytical Path | Curated Parquet → Amazon S3 → Snowflake → Apache Superset planned |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
@@ -77,17 +77,23 @@ Current version: **v0.2.3**
 - Deterministic subscriber `404` and service `503` responses
 - UTC-aware MongoDB reads
 - 107 passing automated tests in current development
+- Bounded `GET /subscribers` listing endpoint
+- Deterministic ascending `subscriber_id` ordering
+- Page and page-size validation
+- Typed pagination metadata
+- Mocked subscriber-listing tests without Atlas dependency
+- Successful manual subscriber-listing validation against MongoDB Atlas
+- 117 passing automated tests in current development
 
 ## Completed milestone
 
-**MongoDB Atlas**
+**FastAPI operational serving contract**
 
 ## Planned milestones
 
-1. FastAPI — in progress
-2. Snowflake analytical warehouse
-3. Apache Superset analytical dashboards
-4. Containerization and deployment automation
+1. Snowflake analytical warehouse
+2. Apache Superset analytical dashboards
+3. Containerization and deployment automation
 
 ---
 
@@ -215,7 +221,7 @@ Semantic Versioning:
 | ✅ | Daily Aggregation |
 | ✅ | subscriber_profiles_current |
 | ✅ | MongoDB Atlas profile synchronization |
-| 🚧 | FastAPI — liveness, readiness, and subscriber lookup implemented |
+| ✅ | FastAPI — liveness, readiness, lookup, and bounded listing implemented |
 | ⏳ | Snowflake analytical warehouse |
 | ⏳ | Apache Superset analytical dashboards |
 | ⏳ | Containerization and deployment automation |
@@ -280,9 +286,9 @@ python -m scripts.sync_mongodb_profiles
 A second synchronization of an unchanged snapshot should report matched
 profiles with zero modifications and zero upserts.
 
-## 9.2 Next milestone
+## 9.2 FastAPI milestone
 
-The FastAPI milestone is in progress. The implemented increments provide:
+The FastAPI operational serving scope is complete. The implemented increments provide:
 
 - a typed `GET /health` liveness endpoint independent of MongoDB;
 - an application-managed shared MongoDB client;
@@ -296,9 +302,20 @@ excludes MongoDB `_id`, preserves UTC timestamps, returns `404 Not Found` for
 unknown subscribers, and returns `503 Service Unavailable` without exposing
 internal database details.
 
-The next increment will implement subscriber listing with bounded pagination.
+The subscriber listing increment adds `GET /subscribers` with one-based page
+numbers, page sizes bounded from 1 through 100, deterministic ascending
+`subscriber_id` ordering, and typed pagination metadata. It returns an empty
+item list for a valid page beyond the available profiles and preserves the
+existing deterministic `503 Service Unavailable` contract.
+
+Manual validation against MongoDB Atlas confirmed two profiles across two
+one-item pages in ascending `subscriber_id` order. A third valid page returned
+an empty item list with stable pagination metadata.
+
 Selected filters remain deferred until concrete operational consumer
-requirements define the access patterns and required indexes.
+requirements define the access patterns and required indexes. The existing
+unique `uq_subscriber_id` index supports the listing order, so this increment
+does not add another index.
 
 After the operational API contract is complete, the analytical path will load
 curated Parquet history from Amazon S3 into Snowflake. Apache Superset will

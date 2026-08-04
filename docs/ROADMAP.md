@@ -80,9 +80,11 @@ Operational capabilities:
 - idempotent bulk upserts;
 - post-write validation and synchronization reports.
 
-The latest immutable release tag remains `v0.2.3`. MongoDB Atlas synchronization
-is complete and the FastAPI milestone is in progress. Typed liveness, readiness,
-and subscriber profile lookup endpoints are implemented and tested.
+MongoDB Atlas synchronization and FastAPI operational serving scopes are
+complete in development. Typed
+liveness, readiness, subscriber profile lookup, and bounded listing endpoints
+are implemented and tested. The latest immutable tag remains `v0.2.3` until
+the serving release checkpoint is committed and tagged.
 
 ---
 
@@ -237,9 +239,9 @@ The profile activity-date contract was also corrected so
 
 ---
 
-## 5.1 Next milestone — FastAPI
+## 5.1 FastAPI milestone
 
-**Status:** In progress.
+**Status:** Completed in development; release checkpoint pending.
 
 ### Objective
 
@@ -250,6 +252,7 @@ Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
 - MongoDB client lifecycle;
 - health and readiness;
 - subscriber lookup by `subscriber_id`;
+- bounded subscriber listing;
 - stable response model;
 - error handling;
 - automated tests.
@@ -289,16 +292,25 @@ Expose MongoDB-backed subscriber profiles through a typed and tested HTTP API.
 - successful manual lookup validation against MongoDB Atlas;
 - 107 passing automated tests.
 
-### Next increment
+### Completed fourth increment
 
 - subscriber listing endpoint;
 - bounded page size;
 - deterministic ordering;
 - pagination metadata;
 - automated tests without Atlas dependency;
-- query-driven indexes only when justified by access patterns.
+- existing `uq_subscriber_id` index reused for ordering;
+- deterministic database `503 Service Unavailable` response;
+- successful manual pagination validation against MongoDB Atlas with two profiles;
+- 117 passing automated tests.
 
-### Non-goals for the first increment
+### Next checkpoint
+
+- retain selected filters as deferred until consumer access patterns are defined;
+- commit the completed serving increment and prepare the immutable `v0.3.0`
+  release checkpoint without starting the analytical or deployment milestones.
+
+### Non-goals for the milestone
 
 - dashboard implementation;
 - direct Parquet reads from the API;
@@ -338,11 +350,11 @@ Transform the project from a batch pipeline into an end-to-end platform that exp
 - ✅ subscriber profile Pydantic models;
 - ✅ health and readiness endpoints;
 - ✅ subscriber lookup;
-- subscriber listing with pagination;
-- selected filters;
-- error handling;
-- OpenAPI documentation;
-- tests.
+- ✅ subscriber listing with pagination;
+- ⏳ selected filters deferred until operational requirements justify them;
+- ✅ error handling;
+- ✅ OpenAPI documentation;
+- ✅ tests.
 
 #### Operational consumer applications
 

@@ -7,6 +7,7 @@ from fastapi import (
     FastAPI,
     HTTPException,
     Path,
+    Query,
     Request,
     status,
 )
@@ -16,6 +17,8 @@ from pymongo.errors import PyMongoError
 
 from api.models import (
     ErrorResponse,
+    PaginationMetadata,
+    SubscriberProfileListResponse,
     SubscriberProfileResponse,
 )
 
@@ -26,7 +29,9 @@ from infrastructure.mongodb_config import (
 )
 
 from serving.mongodb_profiles import (
+    count_subscriber_profiles,
     find_subscriber_profile,
+    find_subscriber_profiles_page,
     get_subscriber_profiles_collection,
 )
 
@@ -141,7 +146,6 @@ def get_readiness(
         status="ready"
     )
 
-
 def build_not_ready_response() -> JSONResponse:
     response = ReadinessErrorResponse(
         status="not_ready",
@@ -151,6 +155,109 @@ def build_not_ready_response() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content=response.model_dump(),
+    )
+
+@app.get(
+    "/subscribers",
+    response_model=SubscriberProfileListResponse,
+    responses={
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": ErrorResponse,
+            "description": (
+                "Subscriber profile service is unavailable."
+            ),
+        },
+    },
+    summary="List subscriber profiles",
+    description=(
+        "Returns a bounded page of current MongoDB-backed "
+        "subscriber profiles ordered by subscriber ID."
+    ),
+)
+def list_subscriber_profiles(
+    request: Request,
+    page: Annotated[
+        int,
+        Query(
+            ge=1,
+            description="One-based page number.",
+        ),
+    ] = 1,
+    page_size: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=100,
+            description="Profiles returned per page.",
+        ),
+    ] = 20,
+) -> SubscriberProfileListResponse:
+    mongodb_client = getattr(
+        request.app.state,
+        "mongodb_client",
+        None,
+    )
+
+    if mongodb_client is None:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Subscriber profile service is unavailable."
+            ),
+        )
+
+    try:
+        collection = (
+            get_subscriber_profiles_collection(
+                mongodb_client
+            )
+        )
+        total_items = count_subscriber_profiles(
+            collection
+        )
+        profile_documents = (
+            find_subscriber_profiles_page(
+                collection,
+                page,
+                page_size,
+            )
+        )
+    except (
+        MongoDBConfigurationError,
+        PyMongoError,
+    ):
+        logger.warning(
+            "Subscriber profile listing failed."
+        )
+
+        raise HTTPException(
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
+            detail=(
+                "Subscriber profile service is unavailable."
+            ),
+        ) from None
+
+    total_pages = (
+        total_items + page_size - 1
+    ) // page_size
+
+    return SubscriberProfileListResponse(
+        items=[
+            SubscriberProfileResponse.model_validate(
+                profile_document
+            )
+            for profile_document in profile_documents
+        ],
+        pagination=PaginationMetadata(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+        ),
     )
 
 @app.get(
