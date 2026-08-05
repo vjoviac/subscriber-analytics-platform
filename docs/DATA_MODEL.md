@@ -328,6 +328,99 @@ The current daily model does not preserve sufficient evidence to derive a histor
 
 A future application-usage dataset may add this capability explicitly.
 
+### Snowflake physical projection
+
+The native table is:
+
+```text
+SUBSCRIBER_ANALYTICS.CURATED.SUBSCRIBER_ACTIVITY_DAILY
+```
+
+Its grain remains `subscriber_id + window_start + window_end`. The table uses
+explicit Snowflake types rather than relying on schema inference at load time.
+The 35 Parquet fields are followed by four required lineage columns populated
+from Snowflake metadata:
+
+| Column | Snowflake type | Source |
+|---|---|---|
+| `source_filename` | `VARCHAR NOT NULL` | `METADATA$FILENAME` |
+| `source_file_content_key` | `VARCHAR NOT NULL` | `METADATA$FILE_CONTENT_KEY` |
+| `source_file_last_modified` | `TIMESTAMP_TZ(9) NOT NULL` | `METADATA$FILE_LAST_MODIFIED` |
+| `loaded_at` | `TIMESTAMP_TZ(9) NOT NULL` | `METADATA$START_SCAN_TIME` |
+
+Relevant explicit mappings include:
+
+- `monthly_data_allowance_gb` → `NUMBER(10,2)`;
+- `technology_access` → `ARRAY`;
+- packet-loss sums → `NUMBER(18,4)`;
+- stored averages → fixed-scale numeric values;
+- Parquet event-window timestamps → `TIMESTAMP_TZ(6)`;
+- source-lineage timestamps → `TIMESTAMP_TZ(9)`.
+
+The physical table retains IMSI, MSISDN, TAC, and cell identifiers because it
+must reproduce the canonical Parquet contract. Those fields are not exposed by
+the initial analytical serving view.
+
+#### Native table contract
+
+| Column | Snowflake type | Nullable |
+|---|---|---:|
+| `subscriber_id` | `VARCHAR` | No |
+| `imsi` | `VARCHAR` | Yes |
+| `msisdn` | `VARCHAR` | Yes |
+| `customer_segment` | `VARCHAR` | Yes |
+| `subscriber_status` | `VARCHAR` | Yes |
+| `plan_id` | `VARCHAR` | Yes |
+| `plan_name` | `VARCHAR` | Yes |
+| `plan_type` | `VARCHAR` | Yes |
+| `monthly_data_allowance_gb` | `NUMBER(10,2)` | Yes |
+| `max_download_mbps` | `NUMBER(38,0)` | Yes |
+| `max_upload_mbps` | `NUMBER(38,0)` | Yes |
+| `technology_access` | `ARRAY` | Yes |
+| `latest_tac` | `VARCHAR` | Yes |
+| `latest_device_vendor` | `VARCHAR` | Yes |
+| `latest_device_model` | `VARCHAR` | Yes |
+| `latest_device_os` | `VARCHAR` | Yes |
+| `latest_device_technology` | `VARCHAR` | Yes |
+| `latest_cell_id` | `VARCHAR` | Yes |
+| `latest_city` | `VARCHAR` | Yes |
+| `latest_state` | `VARCHAR` | Yes |
+| `latest_network_technology` | `VARCHAR` | Yes |
+| `event_count` | `NUMBER(38,0)` | No |
+| `total_bytes_dl` | `NUMBER(38,0)` | No |
+| `total_bytes_ul` | `NUMBER(38,0)` | No |
+| `total_bytes` | `NUMBER(38,0)` | No |
+| `latency_sum` | `NUMBER(38,0)` | No |
+| `latency_sample_count` | `NUMBER(38,0)` | No |
+| `packet_loss_sum` | `NUMBER(18,4)` | No |
+| `packet_loss_sample_count` | `NUMBER(38,0)` | No |
+| `avg_latency_ms` | `NUMBER(12,2)` | Yes |
+| `avg_packet_loss_pct` | `NUMBER(12,4)` | Yes |
+| `aggregation_grain` | `VARCHAR` | No |
+| `window_start` | `TIMESTAMP_TZ(6)` | No |
+| `window_end` | `TIMESTAMP_TZ(6)` | No |
+| `curated_at` | `TIMESTAMP_TZ(6)` | No |
+| `source_filename` | `VARCHAR` | No |
+| `source_file_content_key` | `VARCHAR` | No |
+| `source_file_last_modified` | `TIMESTAMP_TZ(9)` | No |
+| `loaded_at` | `TIMESTAMP_TZ(9)` | No |
+
+### Snowflake analytical serving view
+
+The approved view is:
+
+```text
+SUBSCRIBER_ANALYTICS.ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY
+```
+
+It derives `activity_date` from `window_start`, preserves one row per
+subscriber and daily window, and excludes `imsi`, `msisdn`, `latest_tac`, and
+`latest_cell_id`. It retains metric sums and sample counts so downstream
+queries can calculate weighted averages instead of averaging stored averages.
+
+The read-only role can query this view but cannot access the curated table,
+external stage, file format, or storage integration.
+
 ---
 
 ## 8. Current subscriber profile
@@ -575,9 +668,10 @@ returns an empty `items` list rather than `404 Not Found`.
 
 ---
 
-Analytical datasets are consumed separately through Snowflake and Apache
-Superset. Broad historical aggregations are not added to FastAPI without a
-defined operational requirement.
+Analytical datasets are consumed separately through Snowflake. The public
+visualization product remains to be selected and must query approved analytical
+views rather than MongoDB or FastAPI. Broad historical aggregations are not
+added to FastAPI without a defined operational requirement.
 
 ## 11. Schema evolution
 
@@ -644,6 +738,18 @@ profile_version
 - daily totals equal hourly totals;
 - weighted averages use accumulated components.
 
+### Snowflake analytical warehouse
+
+- loaded row count equals the canonical Parquet row count;
+- aggregate event and byte totals reconcile exactly;
+- `total_bytes = total_bytes_dl + total_bytes_ul`;
+- every loaded row contains all four source-lineage values;
+- every window has `aggregation_grain = 'daily'`;
+- every `window_end` is one day after `window_start`;
+- the analytical `activity_date + subscriber_id` grain is unique;
+- global weighted averages equal the canonical Parquet calculations;
+- unchanged files are skipped when `FORCE = FALSE`.
+
 ### Current profiles
 
 - one row per subscriber;
@@ -690,7 +796,7 @@ Naming conventions:
 
 ## 14. Related documentation
 
-- [Architecture](ARCHITECTURE.md)
+- [Architecture](architecture.md)
 - [Pipeline](PIPELINE.md)
 - [Architecture decisions](DECISIONS.md)
 - [Roadmap](ROADMAP.md)

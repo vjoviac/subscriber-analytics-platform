@@ -630,8 +630,9 @@ Treat Git tags as immutable and increment patch or minor versions for later rele
 
 ### Decision
 
-Prioritize current profiles, MongoDB, FastAPI, Snowflake, and Apache Superset
-before Step Functions, Airflow, or equivalent managed orchestration.
+Prioritize current profiles, MongoDB, FastAPI, Snowflake, and the selected
+analytical visualization layer before Step Functions, Airflow, or equivalent
+managed orchestration.
 
 ### Rationale
 
@@ -766,7 +767,7 @@ last_activity_at  = max(window_start)
 
 ## ADR-031 — Separate operational and analytical consumption paths
 
-**Status:** Accepted
+**Status:** Accepted; visualization-product selection superseded by ADR-033
 
 ### Context
 
@@ -784,12 +785,12 @@ Operational:
 Current Profiles → MongoDB Atlas → FastAPI → Consumer Applications
 
 Analytical:
-Curated Parquet in Amazon S3 → Snowflake → Apache Superset
+Curated Parquet in Amazon S3 → Snowflake → Analytical Visualization
 ```
 
-Snowflake replaces the previously planned Glue/Athena query layer. Apache
-Superset queries Snowflake directly for historical trends, KPIs, and
-exploration. FastAPI remains the controlled interface for operational
+Snowflake replaces the previously planned Glue/Athena query layer. The selected
+visualization product queries Snowflake directly for historical trends, KPIs,
+and exploration. FastAPI remains the controlled interface for operational
 subscriber access. Parquet in Amazon S3 remains the canonical analytical
 output.
 
@@ -798,17 +799,116 @@ output.
 - assigns each technology to a clear workload;
 - prevents analytical scans from affecting operational profile serving;
 - uses Snowflake for governed SQL analytics and independent compute;
-- uses Superset for analytical visualization;
+- keeps analytical visualization independent from the operational API;
 - preserves MongoDB and FastAPI for low-latency operational access;
 - avoids adding overlapping cloud query engines for architectural decoration.
 
 ### Consequences
 
 - Snowflake loading and reconciliation become a separate milestone;
-- Superset depends on the Snowflake analytical contract;
+- the visualization layer depends on the Snowflake analytical contract;
 - operational consumer applications depend on FastAPI;
 - two access paths require separate credentials and deployment controls;
 - Glue and Athena are removed from the committed target architecture.
+
+---
+
+## ADR-032 — Load canonical Parquet into a native Snowflake table
+
+**Status:** Accepted
+
+### Context
+
+The analytical warehouse needs predictable SQL types, file-level traceability,
+controlled reruns, and independent compute without replacing the canonical
+Parquet history in Amazon S3. Querying files alone would not provide the same
+native-table contract or load-history behavior.
+
+### Decision
+
+Use a Snowflake storage integration and external stage to load curated daily
+Parquet into `CURATED.SUBSCRIBER_ACTIVITY_DAILY` with `COPY INTO`. Keep
+`FORCE = FALSE`, populate four non-null source-metadata columns, and expose a
+separate view in the `ANALYTICS` schema.
+
+Use two dedicated roles:
+
+- `SUBSCRIBER_ANALYTICS_LOADER` for stage use, insertion, and physical-table
+  validation;
+- `SUBSCRIBER_ANALYTICS_READER` for approved analytical views only.
+
+Disable secondary roles when validating either role. Use a dedicated
+`X-Small` warehouse with 60-second auto-suspend and a monthly resource monitor.
+
+### Rationale
+
+- preserves S3 Parquet as the canonical product;
+- provides explicit Snowflake types and stable SQL access;
+- records source filename, content key, modification time, and load time;
+- makes unchanged-file reruns idempotent through load history;
+- separates loading from analytical consumption;
+- prevents administrative roles from hiding missing grants during testing;
+- constrains trial and demonstration cost.
+
+### Consequences
+
+- storage-integration setup still requires an AWS trust relationship and
+  account-level Snowflake administration;
+- the real AWS role ARN must be supplied as a session variable and not
+  committed;
+- changed files require an explicit reload decision rather than implicit
+  replacement;
+- orchestration remains manual until an automation requirement is approved;
+- schema changes must update Parquet, the native table, analytical views,
+  validation SQL, and documentation together.
+
+---
+
+## ADR-033 — Defer visualization-product selection
+
+**Status:** Accepted
+
+### Context
+
+Apache Superset was originally planned as the visualization layer. The public
+portfolio requirement now includes professional relevance, low-cost public
+embedding, and delivery under `analytics.joviac.cloud`. Power BI and Tableau
+are also viable candidates, while Superset offers greater hosting control at
+the cost of operating an application and metadata database.
+
+### Decision
+
+Do not couple the completed Snowflake milestone to a visualization product.
+Evaluate Power BI, Tableau, and Apache Superset in a separate milestone against:
+
+- public embedding behavior;
+- licensing and recurring cost;
+- custom-domain presentation;
+- authentication and exposure model;
+- operational responsibility;
+- professional and portfolio value.
+
+The selected product must consume approved Snowflake analytical views. It must
+not query MongoDB or FastAPI for historical analytics. Public presentation is
+expected under `analytics.joviac.cloud`, using the existing Route 53,
+CloudFront, and private-S3 website pattern where appropriate.
+
+### Rationale
+
+- preserves the validated Snowflake boundary regardless of presentation tool;
+- avoids deploying Superset only because it appeared in an earlier diagram;
+- allows the public-sharing model to influence the decision explicitly;
+- prevents visualization licensing from blocking the warehouse milestone;
+- keeps Grafana available for a future observability use case rather than
+  treating it as the default BI layer.
+
+### Consequences
+
+- ADR-031 remains valid for workload separation but no longer fixes Superset;
+- the architecture diagrams use a generic visualization layer;
+- no dashboard product is presented as implemented in the Snowflake release;
+- visualization-specific credentials, roles, hosting, and automation are
+  deferred.
 
 ---
 
@@ -833,7 +933,7 @@ When superseding a decision:
 
 ## Related documentation
 
-- [Architecture](ARCHITECTURE.md)
+- [Architecture](architecture.md)
 - [Data model](DATA_MODEL.md)
 - [Pipeline](PIPELINE.md)
 - [Roadmap](ROADMAP.md)

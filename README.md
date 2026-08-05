@@ -5,8 +5,8 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
 > **Current release:** `v0.3.0`<br>
-> **Current focus:** completed MongoDB Atlas and FastAPI operational serving path.<br>
-> **Next milestone:** Snowflake analytical warehouse.
+> **Current focus:** Snowflake analytical warehouse foundation completed in development after `v0.3.0`.<br>
+> **Next milestone:** select and publish the analytical visualization layer.
 
 ---
 
@@ -73,12 +73,22 @@ The project evolves in stages so that each architectural capability can be imple
 - Bounded page size and deterministic `subscriber_id` ordering.
 - Pagination metadata for operational consumers.
 - Successful manual pagination validation against MongoDB Atlas with two profiles.
+- Secure Snowflake storage integration backed by a dedicated AWS IAM role.
+- External Parquet stage restricted to the curated daily S3 prefix.
+- Native 39-column daily activity table with source-file lineage metadata.
+- Idempotent `COPY INTO` loading with unchanged-file tracking.
+- Dedicated `X-Small` analytical warehouse with 60-second auto-suspend.
+- Monthly resource monitor with notification and suspension thresholds.
+- Least-privilege loader and read-only analytical roles.
+- Stable analytical view without direct telecom identifiers.
+- Reconciliation of four Parquet files, eight rows, and aggregate metrics.
+- Versioned Snowflake setup, loading, access-control, and validation SQL.
 
 ### Planned
 
 - Selected operational filters after concrete consumer requirements are defined.
-- Snowflake analytical warehouse consuming curated Parquet history from Amazon S3.
-- Apache Superset dashboards querying Snowflake.
+- Selection of the public analytical visualization technology.
+- Public dashboard presentation under `analytics.joviac.cloud`.
 - Consumer applications using the operational FastAPI contract.
 - Containerization and deployment automation.
 - Optional streaming ingestion path.
@@ -101,14 +111,14 @@ Daily Curated Dataset ──────────────→ Amazon S3
       ↓                                  ↓
 Current Subscriber Profiles           Snowflake
       ↓                                  ↓
-MongoDB Atlas                        Apache Superset
+MongoDB Atlas                    Analytical Views
       ↓                                  ↓
-FastAPI                           Analytical Insights
+FastAPI                       Visualization Layer — planned
       ↓
 Consumer Applications
 ```
 
-For the complete design, see [Architecture](docs/ARCHITECTURE.md).
+For the complete design, see [Architecture](docs/architecture.md).
 
 ---
 
@@ -124,7 +134,7 @@ For the complete design, see [Architecture](docs/ARCHITECTURE.md).
 | Serving | MongoDB Atlas | Low-latency application access |
 | API | JSON over HTTP | Controlled access for operational applications |
 | Analytical warehouse | Snowflake | Historical and aggregated SQL analytics |
-| Presentation | Apache Superset | Dashboards, KPIs, and data exploration |
+| Presentation | To be selected | Public dashboards, KPIs, and data exploration |
 
 ---
 
@@ -164,6 +174,14 @@ subscriber-analytics-platform/
 │   └── mongodb_profiles.py
 ├── storage/
 │   └── storage_manager.py
+├── sql/
+│   └── snowflake/
+│       ├── 01_foundation.sql
+│       ├── 02_storage.sql
+│       ├── 03_analytics.sql
+│       ├── 04_access_control.sql
+│       ├── 05_validation_queries.sql
+│       └── load_subscriber_activity_daily.sql
 ├── tests/
 ├── .env.example
 ├── .gitignore
@@ -186,6 +204,8 @@ Some directories contain placeholders for later milestones.
 - An AWS named profile with access to the development bucket when cloud upload is enabled.
 - A MongoDB Atlas cluster and database user for serving synchronization.
 - A network access rule that allows the development client to reach Atlas.
+- A Snowflake account when reproducing the analytical warehouse milestone.
+- An AWS IAM role and trust policy for the Snowflake storage integration.
 
 ---
 
@@ -404,6 +424,32 @@ documents and should produce zero modifications and zero upserts.
 
 ---
 
+## Loading curated history into Snowflake
+
+Snowflake setup is versioned under `sql/snowflake/`. On a new account, execute
+the numbered scripts in order:
+
+```text
+01_foundation.sql
+02_storage.sql
+03_analytics.sql
+04_access_control.sql
+05_validation_queries.sql
+```
+
+Before `02_storage.sql`, set the real AWS role ARN only as a Snowflake session
+variable. Never place it in the repository. Use
+`load_subscriber_activity_daily.sql` for subsequent controlled loads. The
+loader disables secondary roles, preserves `FORCE = FALSE`, records source-file
+metadata, validates physical-table invariants, and relies on the warehouse's
+60-second auto-suspend rather than an administrative `OPERATE` grant.
+
+The reader role can query only
+`SUBSCRIBER_ANALYTICS.ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY`; it cannot access the
+curated schema, stage, file format, or storage integration.
+
+---
+
 ## Configuration
 
 General application configuration is centralized in:
@@ -424,7 +470,7 @@ Sensitive or environment-specific values belong in `.env` and must never be comm
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) — components, boundaries, layers, and target architecture.
+- [Architecture](docs/architecture.md) — components, boundaries, layers, and target architecture.
 - [Data model](docs/DATA_MODEL.md) — raw event contract and curated datasets.
 - [Pipeline](docs/PIPELINE.md) — stage-by-stage processing, validation, and rerun behavior.
 - [Architecture decisions](docs/DECISIONS.md) — rationale behind major design choices.
@@ -459,6 +505,9 @@ Existing Git tags are immutable and are never reused.
 - Logs and reports must not contain secrets.
 - MongoDB credentials are supplied through environment variables and are never committed.
 - Atlas network access is restricted to explicitly authorized client addresses.
+- Snowflake reads S3 through role assumption rather than embedded AWS keys.
+- Snowflake loading and analytical access use separate least-privilege roles.
+- Real AWS account identifiers, role ARNs, and Snowflake external IDs are not committed.
 
 ---
 
@@ -487,12 +536,23 @@ FastAPI now supports bounded subscriber listing for future operational
 consumer applications. Selected filters remain deferred until their access
 patterns are defined. The listing was validated against MongoDB Atlas with
 deterministic ordering across two pages and an empty result beyond the final
-page. The target consumption architecture separates two workloads:
+page. The implemented consumption architecture separates two workloads:
 
 ```text
 Operational: MongoDB Atlas → FastAPI → Consumer Applications
-Analytical:  Amazon S3 → Snowflake → Apache Superset
+Analytical:  Amazon S3 → Snowflake → Analytical Views
 ```
+
+The Snowflake foundation loads four canonical daily Parquet files into a native
+table with source-file lineage. Repeated `COPY INTO` execution processes zero
+unchanged files. The eight loaded rows reconcile exactly with the local Parquet
+outputs: 6,300 events, 130,147,195,502 total bytes, 55.34 ms weighted average
+latency, and 0.9031% weighted average packet loss. A read-only analytical view
+supports daily, geographic, technology, and plan-level queries.
+
+The visualization product is intentionally not fixed yet. The next milestone
+will evaluate public embedding, cost, professional relevance, and operation
+under `analytics.joviac.cloud` without changing the Snowflake contract.
 
 See [Roadmap](docs/ROADMAP.md) for the delivery sequence.
 

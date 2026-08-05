@@ -35,6 +35,7 @@ Recommended:
 - PowerShell, Bash, or equivalent shell;
 - AWS CLI for S3 integration;
 - a MongoDB Atlas project only when running the serving synchronization;
+- a Snowflake account only when reproducing the analytical warehouse;
 - Docker only for containerized milestones.
 
 ---
@@ -82,6 +83,8 @@ Rules:
 - keep `MONGODB_URI` only in `.env` or an approved secret manager;
 - never commit a populated MongoDB connection string;
 - sanitize logs and screenshots.
+- provide the Snowflake AWS role ARN only through a session variable;
+- never commit AWS account IDs, role ARNs, or Snowflake External IDs.
 
 ---
 
@@ -139,9 +142,16 @@ FastAPI application and API models.
 
 ### `dashboards/`
 
-Apache Superset assets, dashboard exports, or supporting analytical
-presentation configuration. Superset queries Snowflake; operational consumer
-applications use FastAPI.
+Exports or supporting configuration for the analytical visualization product
+selected in a future milestone. Historical analytics query approved Snowflake
+views; operational consumer applications use FastAPI.
+
+### `sql/snowflake/`
+
+Ordered Snowflake provisioning, analytical-view, RBAC, loading, and validation
+SQL. Setup scripts must avoid `OR REPLACE` where replacement could destroy
+grants, data, or load history. Real environment identifiers must remain outside
+Git.
 
 ### `tests/`
 
@@ -306,6 +316,25 @@ zero upserted documents. Confirm that:
 - `uq_subscriber_id` is unique;
 - existing `_id` values are preserved;
 - dates are BSON dates and missing values are BSON nulls.
+
+### Manual Snowflake validation
+
+Run Snowflake role tests with secondary roles disabled:
+
+```sql
+USE SECONDARY ROLES NONE;
+```
+
+Execute the loader twice over unchanged files. The second run must process zero
+files. Confirm that local Parquet and Snowflake agree on file count, row count,
+daily windows, subscribers, events, byte totals, and weighted quality metrics.
+All lineage fields must be non-null and no duplicate subscriber-window keys may
+exist.
+
+Validate the reader role separately. It must query the approved analytical view
+and fail to access the curated schema and external stage. Do not validate a
+least-privilege role while `ACCOUNTADMIN`, `ORGADMIN`, or another privileged
+secondary role is active.
 
 ---
 
@@ -520,7 +549,7 @@ If a credential is exposed:
 
 ## 20. Related documentation
 
-- [Architecture](ARCHITECTURE.md)
+- [Architecture](architecture.md)
 - [Data model](DATA_MODEL.md)
 - [Pipeline](PIPELINE.md)
 - [Architecture decisions](DECISIONS.md)

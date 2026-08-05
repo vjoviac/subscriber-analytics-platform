@@ -1,0 +1,80 @@
+-- Subscriber Analytics Platform
+-- Snowflake least-privilege access control
+--
+-- Loader:
+--   Reads the existing external stage and inserts into the native table.
+--
+-- Reader:
+--   Queries only approved views in the ANALYTICS schema.
+--
+-- Neither role can administer the storage integration, warehouse,
+-- database, schemas, stages, file formats, tables, or views.
+--
+-- Required primary role: ACCOUNTADMIN
+
+USE SECONDARY ROLES NONE;
+USE ROLE ACCOUNTADMIN;
+
+CREATE ROLE IF NOT EXISTS SUBSCRIBER_ANALYTICS_LOADER
+    COMMENT = 'Loads curated subscriber activity from the existing external stage';
+
+CREATE ROLE IF NOT EXISTS SUBSCRIBER_ANALYTICS_READER
+    COMMENT = 'Read-only access to approved subscriber analytics views';
+
+-- Loader privileges
+
+GRANT USAGE
+    ON WAREHOUSE SUBSCRIBER_ANALYTICS_WH
+    TO ROLE SUBSCRIBER_ANALYTICS_LOADER;
+
+GRANT USAGE
+    ON DATABASE SUBSCRIBER_ANALYTICS
+    TO ROLE SUBSCRIBER_ANALYTICS_LOADER;
+
+GRANT USAGE
+    ON SCHEMA SUBSCRIBER_ANALYTICS.CURATED
+    TO ROLE SUBSCRIBER_ANALYTICS_LOADER;
+
+GRANT USAGE
+    ON STAGE
+        SUBSCRIBER_ANALYTICS.CURATED.SUBSCRIBER_ACTIVITY_DAILY_STAGE
+    TO ROLE SUBSCRIBER_ANALYTICS_LOADER;
+
+GRANT USAGE
+    ON FILE FORMAT
+        SUBSCRIBER_ANALYTICS.CURATED.PARQUET_FORMAT
+    TO ROLE SUBSCRIBER_ANALYTICS_LOADER;
+
+GRANT INSERT, SELECT
+    ON TABLE
+        SUBSCRIBER_ANALYTICS.CURATED.SUBSCRIBER_ACTIVITY_DAILY
+    TO ROLE SUBSCRIBER_ANALYTICS_LOADER;
+
+-- Reader privileges
+
+GRANT USAGE
+    ON WAREHOUSE SUBSCRIBER_ANALYTICS_WH
+    TO ROLE SUBSCRIBER_ANALYTICS_READER;
+
+GRANT USAGE
+    ON DATABASE SUBSCRIBER_ANALYTICS
+    TO ROLE SUBSCRIBER_ANALYTICS_READER;
+
+GRANT USAGE
+    ON SCHEMA SUBSCRIBER_ANALYTICS.ANALYTICS
+    TO ROLE SUBSCRIBER_ANALYTICS_READER;
+
+GRANT SELECT
+    ON VIEW
+        SUBSCRIBER_ANALYTICS.ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY
+    TO ROLE SUBSCRIBER_ANALYTICS_READER;
+
+-- Integrate custom roles into Snowflake's standard role hierarchy.
+-- Project users inherit these roles through SYSADMIN or may receive
+-- an explicit role assignment when separation of duties requires it.
+
+GRANT ROLE SUBSCRIBER_ANALYTICS_LOADER
+    TO ROLE SYSADMIN;
+
+GRANT ROLE SUBSCRIBER_ANALYTICS_READER
+    TO ROLE SYSADMIN;

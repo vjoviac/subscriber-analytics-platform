@@ -51,9 +51,11 @@ Analytical extension:
 ```text
 Curated Parquet in Amazon S3
           ↓
-Load into Snowflake — planned
+Load into Snowflake native table — implemented
           ↓
-Query and visualize with Apache Superset — planned
+Query approved analytical view — implemented
+          ↓
+Public visualization layer — planned
 ```
 
 ---
@@ -499,6 +501,61 @@ Implemented listing contract:
 
 ---
 
+## 13.1 Stage 10 — Snowflake analytical loading
+
+### Input
+
+Canonical daily Parquet files under:
+
+```text
+s3://subscriber-analytics-platform-dev/curated/subscriber_activity_daily/
+```
+
+### Entry points
+
+Provisioning and validation are versioned in `sql/snowflake/`. Recurrent manual
+loading uses:
+
+```text
+sql/snowflake/load_subscriber_activity_daily.sql
+```
+
+### Processing sequence
+
+1. Disable secondary roles.
+2. Activate `SUBSCRIBER_ANALYTICS_LOADER`.
+3. Use the dedicated cost-controlled warehouse.
+4. Read the existing external stage.
+5. Match Parquet fields to target columns case-insensitively.
+6. Populate filename, content-key, modification-time, and load-time metadata.
+7. Abort the statement on any load error.
+8. Keep `FORCE = FALSE` so unchanged successful files are skipped.
+9. Validate rows, subscribers, bytes, weighted metrics, daily grain, windows,
+   lineage completeness, and duplicate keys.
+
+### Idempotence
+
+Snowflake load history records successfully loaded files for the target table.
+Repeating the load over the same four unchanged files processes zero files and
+leaves the row count at eight. Automation is not implemented; Snowpipe and
+scheduled tasks remain deferred.
+
+### Analytical contract
+
+`ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY` exposes one subscriber-day row without
+IMSI, MSISDN, TAC, or cell ID. `SUBSCRIBER_ANALYTICS_READER` can query this view
+but receives no access to the physical table, curated schema, stage, file
+format, or storage integration.
+
+### Reconciliation
+
+Local Parquet and Snowflake match exactly across four files, eight rows, 6,300
+events, 130,147,195,502 total bytes, 55.34 ms weighted latency, and 0.9031%
+weighted packet loss. Byte reconciliation, grain validation, daily-window
+validation, lineage null counts, and duplicate counts are all zero.
+
+---
+
 ## 14. Execution modes
 
 ### SAFE
@@ -687,6 +744,10 @@ suite contains 117 passing tests after the implemented FastAPI liveness,
 readiness, subscriber lookup, and bounded subscriber listing increments.
 Manual validation against MongoDB Atlas confirmed deterministic pagination over
 two profiles and an empty item list for a valid page beyond the available data.
+The Snowflake milestone adds versioned SQL rather than Python runtime code, so
+the automated suite remains at 117 passing tests. Manual integration validation
+confirmed isolated loader and reader roles, idempotent reruns, complete lineage,
+and exact reconciliation with local Parquet.
 
 ---
 
@@ -694,7 +755,8 @@ two profiles and an empty item list for a valid page beyond the available data.
 
 ### Current
 
-Manual command execution.
+Manual command execution for both the Python pipeline and Snowflake
+`COPY INTO` loading.
 
 ### Local next step
 
@@ -757,7 +819,7 @@ After a run:
 
 ## 23. Related documentation
 
-- [Architecture](ARCHITECTURE.md)
+- [Architecture](architecture.md)
 - [Data model](DATA_MODEL.md)
 - [Architecture decisions](DECISIONS.md)
 - [Roadmap](ROADMAP.md)

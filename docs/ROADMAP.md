@@ -60,6 +60,10 @@ Daily Curated Parquet
 Current Subscriber Profiles
     ↓
 MongoDB Atlas
+    ↓
+FastAPI
+
+Daily Curated Parquet → Amazon S3 → Snowflake → Analytical Views
 ```
 
 Operational capabilities:
@@ -73,17 +77,25 @@ Operational capabilities:
 - unit tests;
 - S3 upload integration;
 - current-profile validation and reconciliation;
-- atomic current-profile publication.
+- atomic current-profile publication;
 - secure MongoDB Atlas configuration;
 - validated Parquet-to-BSON conversion;
 - unique subscriber serving index;
 - idempotent bulk upserts;
 - post-write validation and synchronization reports.
+- secure Snowflake storage integration;
+- native daily activity loading with source-file lineage;
+- idempotent unchanged-file reruns;
+- least-privilege loader and reader roles;
+- analytical view and reconciled SQL examples;
+- warehouse auto-suspend and resource-monitor cost controls.
 
 MongoDB Atlas synchronization and FastAPI operational serving scopes are
 complete in `v0.3.0`. Typed
 liveness, readiness, subscriber profile lookup, and bounded listing endpoints
 are implemented and tested. The latest immutable release tag is `v0.3.0`.
+The Snowflake warehouse foundation is implemented and validated in current
+development and is the candidate scope for `v0.4.0`.
 
 ---
 
@@ -383,29 +395,34 @@ FastAPI, and stable operational contracts.
 
 ---
 
-## 7. v0.4.0 — Snowflake analytical warehouse and Superset
+## 7. v0.4.0 — Snowflake analytical warehouse foundation
+
+**Status:** Implemented and validated in development after `v0.3.0`; release
+documentation and tagging remain.
 
 ### Objective
 
-Provide governed SQL analytics over curated history in Amazon S3 and visualize
-the results through Apache Superset.
+Provide governed SQL analytics over curated history in Amazon S3 without
+replacing the canonical Parquet outputs.
 
 ### Deliverables
 
-- standardized S3 prefixes;
-- curated dataset uploads;
-- secure Snowflake storage integration;
-- external stage and Parquet file format;
-- controlled batch loading into Snowflake tables;
-- analytical schemas and documented grains;
-- reconciliation with canonical Parquet outputs;
-- example analytical SQL;
-- warehouse sizing and cost controls;
-- Apache Superset connection to Snowflake;
-- dashboard KPIs, filters, and analytical views;
-- loading, error, and demonstration guidance;
-- security documentation;
-- analytical use cases.
+- ✅ standardized curated daily S3 prefix;
+- ✅ four curated daily Parquet uploads;
+- ✅ secure Snowflake storage integration using an AWS IAM role and External ID;
+- ✅ external stage and logical-type-aware Parquet file format;
+- ✅ 39-column native table with four required lineage fields;
+- ✅ controlled and idempotent `COPY INTO` loading;
+- ✅ separate `CURATED` and `ANALYTICS` schemas;
+- ✅ documented native-table and analytical-view grains;
+- ✅ exact reconciliation with canonical Parquet outputs;
+- ✅ example daily, geographic, technology, and plan-level SQL;
+- ✅ `X-Small` warehouse with 60-second auto-suspend;
+- ✅ monthly 10-credit resource monitor and protective thresholds;
+- ✅ least-privilege loader and reader roles;
+- ✅ secondary-role isolation during RBAC validation;
+- ✅ loading, validation, and demonstration SQL committed;
+- ✅ 117 existing automated tests still passing.
 
 ### Candidate queries
 
@@ -420,11 +437,14 @@ the results through Apache Superset.
 
 ### Exit criteria
 
-- Snowflake loads and queries curated data;
-- loaded row counts and metrics reconcile with local outputs;
-- Superset displays validated analytical results;
-- no raw public access;
-- SQL examples are committed.
+- ✅ Snowflake loads and queries curated data;
+- ✅ loaded row counts and metrics reconcile exactly with local outputs;
+- ✅ unchanged reruns process zero files;
+- ✅ source-file lineage is non-null;
+- ✅ the reader cannot access the curated table or stage;
+- ✅ no raw public access exists;
+- ✅ SQL examples are committed;
+- ⏳ release documentation, commit, and tag.
 
 Snowpipe, dynamic tables, and dbt are optional follow-up capabilities. They
 should be introduced only when automation or transformation requirements
@@ -432,7 +452,44 @@ justify them.
 
 ---
 
-## 8. v0.5.0 — Deployment, automation, and CI/CD
+## 8. v0.5.0 — Public analytical visualization
+
+### Objective
+
+Publish validated Snowflake insights through a public portfolio experience
+under `analytics.joviac.cloud`.
+
+### Decision gate
+
+Evaluate Power BI, Tableau, and Apache Superset against:
+
+- public embedding behavior;
+- free or sustainable licensing;
+- custom-domain presentation;
+- authentication and public-data exposure;
+- Snowflake connectivity and refresh behavior;
+- operational complexity;
+- professional relevance.
+
+### Candidate deliverables
+
+- a dedicated Snowflake visualization identity and read-only role assignment;
+- approved analytical views and KPIs;
+- a small semantic model or equivalent dataset contract;
+- one validated dashboard;
+- a public presentation page under `analytics.joviac.cloud`;
+- synthetic-data disclosure;
+- screenshots and demonstration guidance;
+- cost and security documentation.
+
+The current AWS pattern of Route 53, CloudFront, and a private S3 website origin
+may host the presentation shell. The final design depends on the selected
+visualization product. Grafana remains a future observability candidate rather
+than the default business-intelligence layer.
+
+---
+
+## 9. v0.6.0 — Deployment, automation, and CI/CD
 
 ### Objective
 
@@ -445,7 +502,7 @@ Make the platform reproducible beyond the developer workstation.
 - dependency locking;
 - GitHub Actions for lint, tests, build, and security checks;
 - environment-specific configuration;
-- API and Apache Superset deployment;
+- API and selected visualization deployment where required;
 - scheduled pipeline execution;
 - centralized logs;
 - release workflow;
@@ -461,7 +518,7 @@ Select one based on the learning objective.
 
 ---
 
-## 9. v0.6.0 — Data quality and governance
+## 10. v0.7.0 — Data quality and governance
 
 ### Objective
 
@@ -485,7 +542,7 @@ A framework such as Great Expectations or Soda should be adopted only when requi
 
 ---
 
-## 10. v0.7.0 — Streaming extension
+## 11. v0.8.0 — Streaming extension
 
 ### Objective
 
@@ -524,7 +581,7 @@ The streaming path must demonstrate a real use case rather than merely adding a 
 
 ---
 
-## 11. v0.8.0 — Advanced analytics
+## 12. v0.9.0 — Advanced analytics
 
 Candidate use cases:
 
@@ -545,7 +602,7 @@ Principles:
 
 ---
 
-## 12. v1.0.0 — Stable end-to-end platform
+## 13. v1.0.0 — Stable end-to-end platform
 
 ### Objective
 
@@ -563,7 +620,7 @@ Deliver a stable, documented, reproducible release suitable for portfolio demons
 - operational serving;
 - API;
 - Snowflake analytical warehouse;
-- Apache Superset dashboard;
+- public analytical dashboard;
 - cloud analytics;
 - versioned releases;
 - screenshots;
@@ -580,12 +637,12 @@ Deliver a stable, documented, reproducible release suitable for portfolio demons
 6. Build current profiles.
 7. Retrieve a profile through the API.
 8. Run a Snowflake analytical query.
-9. Show the corresponding Apache Superset insights.
+9. Show the corresponding public dashboard insights.
 10. Explain the scale-out path.
 
 ---
 
-## 13. Backlog
+## 14. Backlog
 
 Potential future items:
 
@@ -611,7 +668,7 @@ Backlog items are not commitments.
 
 ---
 
-## 14. Documentation maintenance
+## 15. Documentation maintenance
 
 Update the roadmap when:
 
@@ -626,9 +683,9 @@ The roadmap must describe reality, not planned work presented as completed.
 
 ---
 
-## 15. Related documentation
+## 16. Related documentation
 
-- [Architecture](ARCHITECTURE.md)
+- [Architecture](architecture.md)
 - [Data model](DATA_MODEL.md)
 - [Pipeline](PIPELINE.md)
 - [Architecture decisions](DECISIONS.md)

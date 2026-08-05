@@ -10,10 +10,12 @@ The architecture supports two goals:
 2. Demonstrate solution architecture decisions across data engineering, cloud storage, serving, APIs, observability, and analytics.
 
 The platform currently runs as a batch pipeline with MongoDB Atlas as its
-operational serving store and FastAPI as its typed operational interface.
-FastAPI supports subscriber lookup and bounded subscriber listing. The target
-state adds a Snowflake analytical warehouse, Apache Superset dashboards,
-consumer applications, and automated deployment.
+operational serving store, FastAPI as its typed operational interface, and
+Snowflake as its analytical warehouse. FastAPI supports subscriber lookup and
+bounded subscriber listing. Snowflake provides governed SQL access to curated
+Parquet history through a native table and stable analytical view. The target
+state adds a publicly embedded visualization layer, consumer applications, and
+automated deployment.
 
 ---
 
@@ -31,10 +33,10 @@ consumer applications, and automated deployment.
 - MongoDB Atlas serving.
 - FastAPI exposure.
 - Operational application consumption.
-- Apache Superset analytical dashboards.
+- Public analytical dashboards through a visualization product to be selected.
 - Data quality validation.
 - Structured logging and execution reporting.
-- Snowflake integration.
+- Snowflake storage integration, native loading, RBAC, and analytical views.
 - A future streaming extension.
 
 ### Out of scope for the current phase
@@ -129,7 +131,17 @@ MongoDB Atlas
 FastAPI
       ├── GET /health
       ├── GET /ready
-      └── GET /subscribers/{subscriber_id}
+      ├── GET /subscribers/{subscriber_id}
+      └── GET /subscribers
+
+Analytical path:
+Amazon S3 — canonical daily Parquet
+      ↓
+Snowflake external stage
+      ↓
+Native daily activity table with file lineage
+      ↓
+Read-only analytical view
 
 Cross-cutting capabilities:
 - centralized configuration;
@@ -142,6 +154,9 @@ Cross-cutting capabilities:
 - environment-based MongoDB configuration;
 - unique serving key and post-write validation;
 - typed operational API models and deterministic error responses.
+- Snowflake load-history idempotence and source-file lineage;
+- least-privilege Snowflake loader and reader roles;
+- cost-controlled `X-Small` analytical warehouse.
 ```
 
 ---
@@ -165,9 +180,9 @@ Current Subscriber Profiles         Amazon S3
       ↓                              ↓
 MongoDB Atlas                        Snowflake
       ↓                              ↓
-FastAPI                              Apache Superset
+FastAPI                         Analytical Views
       ↓                              ↓
-Consumer Applications               Analytical Insights
+Consumer Applications          Visualization Layer
 ```
 
 ---
@@ -347,11 +362,25 @@ Responsibilities:
 - support governed schemas, transformations, and query workloads;
 - preserve Parquet in S3 as the canonical analytical output.
 
-The first Snowflake increment should use an external stage and controlled batch
-loading. Snowpipe, dynamic tables, and dbt remain optional later extensions
-that require explicit use cases.
+The implemented foundation uses a storage integration backed by a dedicated
+AWS IAM role, an external stage restricted to the curated daily prefix, a
+Parquet file format, and controlled `COPY INTO` loading. The native table
+contains the 35 physical Parquet fields plus four non-null source-lineage
+fields. Unchanged files are skipped through Snowflake load history while
+`FORCE` remains disabled.
 
-### 6.12 Apache Superset
+`SUBSCRIBER_ANALYTICS_LOADER` can use only the dedicated warehouse, curated
+schema, existing stage and file format, and target table. It cannot inspect the
+storage integration or operate the warehouse. `SUBSCRIBER_ANALYTICS_READER`
+can query only approved views in the `ANALYTICS` schema. Validation sessions
+disable secondary roles so administrative grants cannot mask missing access.
+
+The dedicated `X-Small` warehouse uses 60-second auto-suspend and a monthly
+10-credit resource monitor with notification and suspension thresholds.
+Snowpipe, tasks, dynamic tables, and dbt remain optional later extensions that
+require explicit automation or transformation use cases.
+
+### 6.12 Analytical visualization layer
 
 Responsibilities:
 
@@ -359,6 +388,12 @@ Responsibilities:
 - display historical trends, KPIs, and aggregated insights;
 - support interactive exploration without querying MongoDB;
 - avoid embedding database credentials in public client code.
+
+The product is intentionally not selected yet. Power BI, Tableau, and Apache
+Superset are candidates. The decision must account for professional relevance,
+public embedding, cost, operational ownership, and delivery under
+`analytics.joviac.cloud`. This evaluation does not change the Snowflake view
+contract.
 
 ---
 
@@ -536,6 +571,13 @@ A failed run must:
 - environment-based MongoDB secrets;
 - explicit MongoDB connection and server-selection timeouts;
 - unique subscriber index.
+- dedicated AWS IAM role and External ID for Snowflake S3 access;
+- S3 permissions restricted to the curated daily prefix;
+- no embedded AWS keys in Snowflake objects or repository SQL;
+- separate Snowflake loader and reader roles;
+- secondary roles disabled during least-privilege validation;
+- source-file lineage on every loaded native-table row;
+- warehouse auto-suspend and resource-monitor thresholds.
 
 ### Planned controls
 
@@ -556,7 +598,7 @@ The current implementation favors clarity. It can evolve by:
 - replacing in-process transformations with a distributed execution engine;
 - parallelizing independent hourly partitions;
 - compacting small files;
-- loading curated history into Snowflake;
+- loading additional curated history into the implemented Snowflake contract;
 - scaling Snowflake compute independently for analytical workloads;
 - using bulk writes for MongoDB;
 - introducing incremental profile updates when history becomes large.
@@ -595,8 +637,9 @@ are implemented; listing and consumer applications remain planned.
 
 ### Stage 4 — Cloud analytics
 
-Snowflake loading, analytical models, reconciled SQL examples, and Apache
-Superset dashboards.
+Snowflake loading, analytical views, least-privilege roles, lineage, cost
+controls, and reconciled SQL examples are implemented. Public visualization is
+the next independent capability.
 
 ### Stage 5 — Managed execution
 
@@ -611,8 +654,8 @@ Containers, scheduling, centralized logs, CI/CD, infrastructure as code, and opt
 - Analytics code does not contain credentials.
 - API code does not read raw files.
 - Operational consumer applications use FastAPI and do not connect directly to MongoDB.
-- Apache Superset connects to Snowflake and does not use MongoDB or FastAPI as
-  an analytical query engine.
+- The selected analytical visualization product connects to Snowflake and does
+  not use MongoDB or FastAPI as an analytical query engine.
 - Snowflake does not replace the canonical Parquet history in Amazon S3.
 - MongoDB does not replace Parquet history.
 - The orchestrator coordinates but does not duplicate transformations.

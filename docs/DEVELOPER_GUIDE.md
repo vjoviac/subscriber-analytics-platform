@@ -1,7 +1,7 @@
 # DEVELOPER_GUIDE.md
 
 # Subscriber Analytics Platform
-**Developer Guide (Operational Edition)**
+**Developer Guide (Analytical Warehouse Edition)**
 
 > **Purpose:** This document is the authoritative engineering reference for continuing the development of the Subscriber Analytics Platform. It captures the project's current state, architectural decisions, engineering conventions, and development roadmap. Read this document before implementing new features or continuing development.
 
@@ -12,11 +12,11 @@
 | Current Version | v0.3.0 |
 | Current Git Tag | v0.3.0 |
 | Primary Branch | main |
-| Completed Milestone | FastAPI operational serving contract |
+| Completed Milestone | Snowflake analytical warehouse foundation implemented and validated after `v0.3.0` |
 | Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas → FastAPI |
-| Next Deliverable | Snowflake analytical warehouse foundation |
+| Next Deliverable | Public analytical visualization selection and proof of delivery |
 | Serving Path | MongoDB Atlas with FastAPI liveness, readiness, subscriber lookup, and bounded listing implemented |
-| Analytical Path | Curated Parquet → Amazon S3 → Snowflake → Apache Superset planned |
+| Analytical Path | Curated Parquet → Amazon S3 → Snowflake native table → analytical view implemented |
 | Primary Language | Python |
 | Storage Formats | JSONL, Parquet |
 | Architectural Style | Layered Batch Pipeline |
@@ -84,16 +84,31 @@ Current version: **v0.3.0**
 - Mocked subscriber-listing tests without Atlas dependency
 - Successful manual subscriber-listing validation against MongoDB Atlas
 - 117 passing automated tests in the v0.3.0 release
+- Secure Snowflake storage integration with a dedicated AWS IAM role and External ID
+- Curated daily S3 prefix restricted through allowed locations and least-privilege IAM
+- External stage and logical-type-aware Parquet file format
+- Native 39-column daily activity table with four required lineage fields
+- Idempotent `COPY INTO` loading with `FORCE = FALSE`
+- Four daily Parquet files loaded with two rows each and zero load errors
+- Unchanged-file reruns processing zero files
+- Dedicated `X-Small` warehouse with 60-second auto-suspend
+- Monthly 10-credit resource monitor with 50%, 80%, and 100% actions
+- Seven-privilege loader role without integration access or warehouse operation
+- Four-privilege reader role restricted to an approved analytical view
+- Secondary roles disabled during RBAC validation
+- Exact local-Parquet-to-Snowflake reconciliation across 8 rows and 6,300 events
+- Validated daily, geographic, technology, and plan-level SQL examples
+- Versioned Snowflake setup, load, access-control, and validation scripts
 
 ## Completed milestone
 
-**FastAPI operational serving contract**
+**Snowflake analytical warehouse foundation**
 
 ## Planned milestones
 
-1. Snowflake analytical warehouse
-2. Apache Superset analytical dashboards
-3. Containerization and deployment automation
+1. Select and publish the analytical visualization layer
+2. Containerization and deployment automation
+3. Formal data quality and governance
 
 ---
 
@@ -107,6 +122,7 @@ Current version: **v0.3.0**
 | ingestion | Data ingestion |
 | storage | Persistence |
 | scripts | Pipeline orchestration |
+| sql/snowflake | Reproducible Snowflake setup, loading, RBAC, and validation |
 | tests | Automated tests |
 | docs | Documentation |
 
@@ -124,14 +140,14 @@ Enriched Parquet
 Curated Hourly
     ↓
 Curated Daily ───────────────→ Amazon S3
-    ↓                              ↓ planned
+    ↓                              ↓
 Current Subscriber Profiles     Snowflake
     ↓                              ↓
-MongoDB Atlas                  Apache Superset
+MongoDB Atlas               Analytical Views
     ↓
 FastAPI
-    ↓ planned
-Consumer Applications
+    ↓ planned                    ↓ planned
+Consumer Applications      Visualization Layer
 ```
 
 Design principles:
@@ -166,7 +182,8 @@ Design principles:
 
 - FastAPI is the controlled interface for operational subscriber access.
 - MongoDB is the serving database.
-- Apache Superset will query Snowflake, not MongoDB or FastAPI.
+- The selected analytical visualization product will query approved Snowflake
+  views, not MongoDB or FastAPI.
 - Snowflake will serve historical and aggregated analytics without replacing
   canonical Parquet datasets in S3.
 - UTC everywhere.
@@ -222,8 +239,8 @@ Semantic Versioning:
 | ✅ | subscriber_profiles_current |
 | ✅ | MongoDB Atlas profile synchronization |
 | ✅ | FastAPI — liveness, readiness, lookup, and bounded listing implemented |
-| ⏳ | Snowflake analytical warehouse |
-| ⏳ | Apache Superset analytical dashboards |
+| ✅ | Snowflake analytical warehouse foundation |
+| ⏳ | Public analytical visualization layer |
 | ⏳ | Containerization and deployment automation |
 
 ---
@@ -317,11 +334,96 @@ requirements define the access patterns and required indexes. The existing
 unique `uq_subscriber_id` index supports the listing order, so this increment
 does not add another index.
 
-After the operational API contract is complete, the analytical path will load
-curated Parquet history from Amazon S3 into Snowflake. Apache Superset will
-query Snowflake for historical trends, KPIs, and exploration. This path remains
-separate from MongoDB Atlas and FastAPI, which serve current subscriber
-profiles and operational consumers.
+The analytical path loads curated Parquet history from Amazon S3 into
+Snowflake. It remains separate from MongoDB Atlas and FastAPI, which serve
+current subscriber profiles and operational consumers.
+
+## 9.3 Snowflake analytical warehouse
+
+Canonical input:
+
+```text
+s3://subscriber-analytics-platform-dev/
+└── curated/subscriber_activity_daily/
+    └── year=YYYY/month=MM/day=DD/subscriber_activity_daily.parquet
+```
+
+Implemented Snowflake objects:
+
+```text
+SUBSCRIBER_ANALYTICS
+├── CURATED
+│   ├── PARQUET_FORMAT
+│   ├── SUBSCRIBER_ACTIVITY_DAILY_STAGE
+│   └── SUBSCRIBER_ACTIVITY_DAILY
+└── ANALYTICS
+    └── SUBSCRIBER_ACTIVITY_DAILY
+```
+
+Account-level objects:
+
+- `S3_SUBSCRIBER_ACTIVITY_DAILY_INT`;
+- `SUBSCRIBER_ANALYTICS_WH`;
+- `SUBSCRIBER_ANALYTICS_MONITOR`;
+- `SUBSCRIBER_ANALYTICS_LOADER`;
+- `SUBSCRIBER_ANALYTICS_READER`.
+
+The native table contains the 35 Parquet fields plus:
+
+- `source_filename`;
+- `source_file_content_key`;
+- `source_file_last_modified`;
+- `loaded_at`.
+
+The analytical view preserves one row per subscriber and daily window, derives
+`activity_date`, and excludes IMSI, MSISDN, TAC, and cell ID. Metric sums and
+sample counts remain available for correct weighted aggregation.
+
+Execute setup scripts in order:
+
+```text
+sql/snowflake/01_foundation.sql
+sql/snowflake/02_storage.sql
+sql/snowflake/03_analytics.sql
+sql/snowflake/04_access_control.sql
+sql/snowflake/05_validation_queries.sql
+```
+
+Before `02_storage.sql`, define the AWS role ARN only as a Snowflake session
+variable. Never commit the real ARN, AWS account ID, or Snowflake External ID.
+Use `load_subscriber_activity_daily.sql` for controlled subsequent loads.
+
+RBAC validation must begin with:
+
+```sql
+USE SECONDARY ROLES NONE;
+```
+
+Otherwise roles such as `ACCOUNTADMIN` or `ORGADMIN` can remain active as
+secondary roles and conceal missing grants.
+
+Validated reconciliation for four daily files:
+
+| Metric | Value |
+|---|---:|
+| Files | 4 |
+| Rows | 8 |
+| Daily windows | 4 |
+| Subscribers | 2 |
+| Events | 6,300 |
+| Download bytes | 117,759,989,294 |
+| Upload bytes | 12,387,206,208 |
+| Total bytes | 130,147,195,502 |
+| Weighted average latency | 55.34 ms |
+| Weighted average packet loss | 0.9031% |
+
+Local Parquet and Snowflake results match exactly. Unchanged reruns process
+zero files. Automation remains deferred; no Snowpipe, task, dynamic table, or
+scheduled trigger is implemented.
+
+The visualization product is not yet selected. Power BI, Tableau, and Apache
+Superset remain candidates for a separately evaluated public dashboard under
+`analytics.joviac.cloud`.
 
 ---
 
