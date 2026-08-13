@@ -1,0 +1,42 @@
+name: subscriber-analytics-superset
+
+services:
+  postgres:
+    image: postgres:17.10-bookworm
+    env_file:
+      - .env
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - superset_postgres_data:/var/lib/postgresql/data
+
+  superset:
+    build:
+      context: .
+    image: subscriber-analytics-superset:6.0.0
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8088:8088"
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - "from urllib.request import urlopen; response = urlopen('http://localhost:8088/health', timeout=5); assert response.status == 200; assert response.read().decode().strip() == 'OK'"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  superset_postgres_data:
