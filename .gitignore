@@ -33,3 +33,6 @@ htmlcov/
 
 # Project status
 docs/project_status.md
+
+# Local cryptographic material
+docker/superset/secrets/

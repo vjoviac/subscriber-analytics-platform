@@ -85,6 +85,10 @@ Rules:
 - sanitize logs and screenshots.
 - provide the Snowflake AWS role ARN only through a session variable;
 - never commit AWS account IDs, role ARNs, or Snowflake External IDs.
+- never commit `docker/superset/.env`, RSA private keys, public-key files from
+  the local secrets directory, or private-key passphrases;
+- store local operator credentials and key passphrases in a password manager;
+- use a Snowflake `SERVICE` user with key-pair authentication for Superset.
 
 ---
 
@@ -97,6 +101,8 @@ data/
 logs/
 reports/
 .env
+docker/superset/.env
+docker/superset/secrets/
 __pycache__/
 .pytest_cache/
 .venv/
@@ -142,9 +148,17 @@ FastAPI application and API models.
 
 ### `dashboards/`
 
-Exports or supporting configuration for the analytical visualization product
-selected in a future milestone. Historical analytics query approved Snowflake
-views; operational consumer applications use FastAPI.
+Future exports or supporting configuration for Apache Superset dashboards.
+Historical analytics query approved Snowflake views; operational consumer
+applications use FastAPI.
+
+### `docker/superset/`
+
+Reproducible local Apache Superset and PostgreSQL configuration. The custom
+image extends the official lean image only with required database drivers and
+configuration. Compose must keep PostgreSQL private, mount the Snowflake key
+read-only, isolate environment variables by service, and avoid adding Redis,
+Celery, alerts, or reports without an approved requirement.
 
 ### `sql/snowflake/`
 
@@ -336,6 +350,29 @@ and fail to access the curated schema and external stage. Do not validate a
 least-privilege role while `ACCOUNTADMIN`, `ORGADMIN`, or another privileged
 secondary role is active.
 
+### Manual Superset validation
+
+Build and start the local services with the ignored Superset `.env` file:
+
+```powershell
+docker compose `
+  --env-file docker\superset\.env `
+  --file docker\superset\compose.yaml `
+  up --detach --build --wait
+```
+
+Confirm that both services are healthy, PostgreSQL has no host-published port,
+and the Snowflake private key is mounted read-only only into Superset. Validate
+the key-pair-authenticated `SUPERSET_SERVICE_USER` with secondary roles disabled.
+It must query `ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY` and fail against the curated
+table and external stage.
+
+Within Superset, confirm that the registered dataset uses the approved view and
+that semantic latency and packet-loss metrics divide accumulated sums by sample
+counts. The daily validation chart must reconcile four windows, eight rows, two
+subscribers, and 6,300 events. Never take screenshots that expose connection
+details, private-key contents, or passphrases.
+
 ---
 
 ## 12. Documentation standards
@@ -381,6 +418,7 @@ Suggested branch names:
 feature/current-subscriber-profiles
 feature/mongodb-serving
 feature/fastapi-service
+feature/superset-visualization
 fix/daily-reconciliation
 docs/architecture-refresh
 test/profile-builder

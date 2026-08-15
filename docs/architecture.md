@@ -14,8 +14,9 @@ operational serving store, FastAPI as its typed operational interface, and
 Snowflake as its analytical warehouse. FastAPI supports subscriber lookup and
 bounded subscriber listing. Snowflake provides governed SQL access to curated
 Parquet history through a native table and stable analytical view. The target
-state adds a publicly embedded visualization layer, consumer applications, and
-automated deployment.
+state now includes a locally validated Apache Superset visualization layer.
+Public hosting, consumer applications, and automated deployment remain future
+capabilities.
 
 ---
 
@@ -33,7 +34,7 @@ automated deployment.
 - MongoDB Atlas serving.
 - FastAPI exposure.
 - Operational application consumption.
-- Public analytical dashboards through a visualization product to be selected.
+- Apache Superset dashboards over approved Snowflake analytical views.
 - Data quality validation.
 - Structured logging and execution reporting.
 - Snowflake storage integration, native loading, RBAC, and analytical views.
@@ -142,6 +143,10 @@ Snowflake external stage
 Native daily activity table with file lineage
       ↓
 Read-only analytical view
+      ↓
+Apache Superset 6.0.0
+      ↓
+Validated semantic metrics and daily KPI chart
 
 Cross-cutting capabilities:
 - centralized configuration;
@@ -157,6 +162,8 @@ Cross-cutting capabilities:
 - Snowflake load-history idempotence and source-file lineage;
 - least-privilege Snowflake loader and reader roles;
 - cost-controlled `X-Small` analytical warehouse.
+- Dockerized Superset and PostgreSQL health checks and persistent metadata;
+- encrypted RSA key-pair authentication for the Snowflake service identity.
 ```
 
 ---
@@ -182,7 +189,7 @@ MongoDB Atlas                        Snowflake
       ↓                              ↓
 FastAPI                         Analytical Views
       ↓                              ↓
-Consumer Applications          Visualization Layer
+Consumer Applications          Apache Superset
 ```
 
 ---
@@ -389,11 +396,27 @@ Responsibilities:
 - support interactive exploration without querying MongoDB;
 - avoid embedding database credentials in public client code.
 
-The product is intentionally not selected yet. Power BI, Tableau, and Apache
-Superset are candidates. The decision must account for professional relevance,
-public embedding, cost, operational ownership, and delivery under
-`analytics.joviac.cloud`. This evaluation does not change the Snowflake view
-contract.
+Apache Superset 6.0.0 is selected and locally validated. A custom image extends
+the official lean image with `psycopg2-binary` for PostgreSQL metadata and
+`snowflake-sqlalchemy` for analytical connectivity. Docker Compose runs only
+Superset and PostgreSQL 17.10; Redis, Celery, alerts, and reports are deferred.
+
+PostgreSQL persists Superset metadata in a named volume. Both containers expose
+health checks, PostgreSQL is not published to the host, and Superset is bound
+only to `127.0.0.1:8088` during local development.
+
+Snowflake access uses `SUPERSET_SERVICE_USER`, a non-human `TYPE = SERVICE`
+identity with an encrypted RSA private key mounted read-only into Superset. The
+user receives only `SUBSCRIBER_ANALYTICS_READER`. Direct authentication tests
+with secondary roles disabled proved that the identity can query the approved
+analytical view and cannot access the curated table or external stage.
+
+The registered Superset dataset maps to
+`ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY`. Its semantic metrics preserve correct
+aggregation by using sums and sample counts for latency and packet loss. The
+initial `Daily Subscriber KPI Validation` table reconciles four daily windows,
+eight rows, two subscribers, and 6,300 events. Dashboard design and public
+delivery under `analytics.joviac.cloud` remain pending.
 
 ---
 
@@ -578,6 +601,11 @@ A failed run must:
 - secondary roles disabled during least-privilege validation;
 - source-file lineage on every loaded native-table row;
 - warehouse auto-suspend and resource-monitor thresholds.
+- dedicated passwordless Snowflake service identity for Superset;
+- encrypted private key stored only in the ignored local secrets directory;
+- private key mounted read-only into the Superset container;
+- explicit environment-variable isolation between PostgreSQL and Superset;
+- Superset database-level write features disabled in addition to Snowflake RBAC.
 
 ### Planned controls
 
@@ -587,6 +615,7 @@ A failed run must:
 - least-privilege deployment roles;
 - dependency scanning;
 - safe logs without credentials.
+- managed secret storage and key rotation for a deployed Superset environment.
 
 ---
 
@@ -638,10 +667,15 @@ are implemented; listing and consumer applications remain planned.
 ### Stage 4 — Cloud analytics
 
 Snowflake loading, analytical views, least-privilege roles, lineage, cost
-controls, and reconciled SQL examples are implemented. Public visualization is
-the next independent capability.
+controls, and reconciled SQL examples are implemented.
 
-### Stage 5 — Managed execution
+### Stage 5 — Local analytical visualization
+
+Apache Superset, PostgreSQL metadata storage, Snowflake key-pair authentication,
+semantic metrics, and one validation chart are implemented locally. Dashboard
+design and public hosting remain pending.
+
+### Stage 6 — Managed execution
 
 Containers, scheduling, centralized logs, CI/CD, infrastructure as code, and optional streaming.
 
@@ -654,8 +688,8 @@ Containers, scheduling, centralized logs, CI/CD, infrastructure as code, and opt
 - Analytics code does not contain credentials.
 - API code does not read raw files.
 - Operational consumer applications use FastAPI and do not connect directly to MongoDB.
-- The selected analytical visualization product connects to Snowflake and does
-  not use MongoDB or FastAPI as an analytical query engine.
+- Apache Superset connects to approved Snowflake views and does not use MongoDB
+  or FastAPI as an analytical query engine.
 - Snowflake does not replace the canonical Parquet history in Amazon S3.
 - MongoDB does not replace Parquet history.
 - The orchestrator coordinates but does not duplicate transformations.

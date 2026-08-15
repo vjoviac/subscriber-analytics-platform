@@ -63,7 +63,7 @@ MongoDB Atlas
     ↓
 FastAPI
 
-Daily Curated Parquet → Amazon S3 → Snowflake → Analytical Views
+Daily Curated Parquet → Amazon S3 → Snowflake → Analytical Views → Apache Superset
 ```
 
 Operational capabilities:
@@ -89,13 +89,19 @@ Operational capabilities:
 - least-privilege loader and reader roles;
 - analytical view and reconciled SQL examples;
 - warehouse auto-suspend and resource-monitor cost controls.
+- a custom Apache Superset 6.0.0 image with PostgreSQL and Snowflake drivers;
+- persistent PostgreSQL metadata storage through Docker Compose;
+- a passwordless Snowflake service identity using encrypted RSA key-pair authentication;
+- direct assignment of the least-privilege reader role;
+- a saved Snowflake connection and analytical dataset in Superset;
+- five reconciled semantic metrics and a saved daily KPI validation chart.
 
 MongoDB Atlas synchronization and FastAPI operational serving scopes are
-complete in `v0.3.0`. Typed
-liveness, readiness, subscriber profile lookup, and bounded listing endpoints
-are implemented and tested. The latest immutable release tag is `v0.3.0`.
-The Snowflake warehouse foundation is implemented and validated in current
-development and is the candidate scope for `v0.4.0`.
+complete in `v0.3.0`. The Snowflake warehouse foundation is complete in
+`v0.4.0`, the latest immutable release tag. Current development targets
+`v0.5.0`: Apache Superset is running locally and its secure Snowflake
+integration, semantic dataset, metrics, and first validation chart are
+complete. The first dashboard and public deployment remain pending.
 
 ---
 
@@ -397,8 +403,7 @@ FastAPI, and stable operational contracts.
 
 ## 7. v0.4.0 — Snowflake analytical warehouse foundation
 
-**Status:** Implemented and validated in development after `v0.3.0`; release
-documentation and tagging remain.
+**Status:** Completed release. Tagged as `v0.4.0`.
 
 ### Objective
 
@@ -444,7 +449,7 @@ replacing the canonical Parquet outputs.
 - ✅ the reader cannot access the curated table or stage;
 - ✅ no raw public access exists;
 - ✅ SQL examples are committed;
-- ⏳ release documentation, commit, and tag.
+- ✅ release documentation, commit, and tag.
 
 Snowpipe, dynamic tables, and dbt are optional follow-up capabilities. They
 should be introduced only when automation or transformation requirements
@@ -454,38 +459,53 @@ justify them.
 
 ## 8. v0.5.0 — Public analytical visualization
 
+**Status:** In progress after `v0.4.0`.
+
 ### Objective
 
 Publish validated Snowflake insights through a public portfolio experience
 under `analytics.joviac.cloud`.
 
-### Decision gate
+### Resolved decision gate
 
-Evaluate Power BI, Tableau, and Apache Superset against:
+Apache Superset is the selected analytical visualization layer:
 
-- public embedding behavior;
-- free or sustainable licensing;
-- custom-domain presentation;
-- authentication and public-data exposure;
-- Snowflake connectivity and refresh behavior;
-- operational complexity;
-- professional relevance.
+- Power BI Service was unavailable with a personal account;
+- Tableau Public would expose dashboards and their data publicly;
+- Grafana's direct Snowflake connector requires Grafana Cloud or Enterprise,
+  and Grafana remains reserved for observability;
+- Apache Superset supports the required self-hosted learning path, Snowflake
+  connectivity, and eventual custom-domain deployment.
 
-### Candidate deliverables
+### Deliverables
 
-- a dedicated Snowflake visualization identity and read-only role assignment;
-- approved analytical views and KPIs;
-- a small semantic model or equivalent dataset contract;
-- one validated dashboard;
-- a public presentation page under `analytics.joviac.cloud`;
-- synthetic-data disclosure;
-- screenshots and demonstration guidance;
-- cost and security documentation.
+- ✅ custom Apache Superset 6.0.0 image derived from the official lean image;
+- ✅ PostgreSQL 17.10 persistent metadata database;
+- ✅ local Docker Compose topology with health checks;
+- ✅ PostgreSQL and Snowflake drivers pinned in the custom image;
+- ✅ local secrets excluded from Git;
+- ✅ dedicated passwordless Snowflake service identity;
+- ✅ encrypted RSA key-pair authentication;
+- ✅ direct read-only role assignment and secondary-role isolation;
+- ✅ positive access to the approved analytical view;
+- ✅ denied access to the curated table and external stage;
+- ✅ saved Snowflake connection in Superset;
+- ✅ semantic dataset over `ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY`;
+- ✅ active-subscriber, event, traffic, latency, and packet-loss metrics;
+- ✅ saved `Daily Subscriber KPI Validation` chart reconciled across four days;
+- ⏳ first analytical dashboard;
+- ⏳ public presentation page under `analytics.joviac.cloud`;
+- ⏳ synthetic-data disclosure, screenshots, and demonstration guidance;
+- ⏳ public-hosting cost and security documentation.
+
+Redis, Celery, alerts, and reports are intentionally excluded from the initial
+topology. They should be added only when a concrete asynchronous workload
+requires them.
 
 The current AWS pattern of Route 53, CloudFront, and a private S3 website origin
-may host the presentation shell. The final design depends on the selected
-visualization product. Grafana remains a future observability candidate rather
-than the default business-intelligence layer.
+may host the presentation shell. The public Superset deployment design remains
+an explicit later increment. Grafana remains a future observability candidate
+rather than the business-intelligence layer.
 
 ---
 
@@ -497,8 +517,8 @@ Make the platform reproducible beyond the developer workstation.
 
 ### Candidate deliverables
 
-- Dockerfiles;
-- Docker Compose where appropriate;
+- containerization beyond the implemented local Superset stack;
+- production-oriented Compose or orchestration where appropriate;
 - dependency locking;
 - GitHub Actions for lint, tests, build, and security checks;
 - environment-specific configuration;

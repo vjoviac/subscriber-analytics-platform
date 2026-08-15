@@ -4,9 +4,9 @@ A portfolio-grade telecommunications data platform that simulates subscriber net
 
 The project demonstrates practical skills in data engineering, solution architecture, cloud integration, observability, API design, and analytics delivery.
 
-> **Current release:** `v0.3.0`<br>
-> **Current focus:** Snowflake analytical warehouse foundation completed in development after `v0.3.0`.<br>
-> **Next milestone:** select and publish the analytical visualization layer.
+> **Current release:** `v0.4.0`<br>
+> **Current focus:** Apache Superset analytical visualization in development after `v0.4.0`.<br>
+> **Next deliverable:** design and validate the first analytical dashboard.
 
 ---
 
@@ -83,11 +83,17 @@ The project evolves in stages so that each architectural capability can be imple
 - Stable analytical view without direct telecom identifiers.
 - Reconciliation of four Parquet files, eight rows, and aggregate metrics.
 - Versioned Snowflake setup, loading, access-control, and validation SQL.
+- Apache Superset 6.0.0 custom lean image with pinned PostgreSQL and Snowflake drivers.
+- PostgreSQL 17.10 metadata store with persistent volume and container health checks.
+- Dedicated Snowflake `SERVICE` user with encrypted RSA key-pair authentication.
+- Read-only Superset connection restricted to the approved `ANALYTICS` view.
+- Reusable semantic metrics for subscribers, events, traffic, latency, and packet loss.
+- Validated `Daily Subscriber KPI Validation` chart over four daily windows.
 
 ### Planned
 
 - Selected operational filters after concrete consumer requirements are defined.
-- Selection of the public analytical visualization technology.
+- First analytical dashboard and portfolio narrative.
 - Public dashboard presentation under `analytics.joviac.cloud`.
 - Consumer applications using the operational FastAPI contract.
 - Containerization and deployment automation.
@@ -113,7 +119,7 @@ Current Subscriber Profiles           Snowflake
       ↓                                  ↓
 MongoDB Atlas                    Analytical Views
       ↓                                  ↓
-FastAPI                       Visualization Layer — planned
+FastAPI                       Apache Superset — local
       ↓
 Consumer Applications
 ```
@@ -134,7 +140,7 @@ For the complete design, see [Architecture](docs/architecture.md).
 | Serving | MongoDB Atlas | Low-latency application access |
 | API | JSON over HTTP | Controlled access for operational applications |
 | Analytical warehouse | Snowflake | Historical and aggregated SQL analytics |
-| Presentation | To be selected | Public dashboards, KPIs, and data exploration |
+| Presentation | Apache Superset | Snowflake-backed dashboards, KPIs, and exploration |
 
 ---
 
@@ -151,6 +157,13 @@ subscriber-analytics-platform/
 │   └── settings.py
 ├── dashboards/
 │   └── dashboard.py
+├── docker/
+│   └── superset/
+│       ├── .env.example
+│       ├── compose.yaml
+│       ├── Dockerfile
+│       ├── requirements.txt
+│       └── superset_config.py
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── CONTRIBUTING.md
@@ -181,6 +194,7 @@ subscriber-analytics-platform/
 │       ├── 03_analytics.sql
 │       ├── 04_access_control.sql
 │       ├── 05_validation_queries.sql
+│       ├── 06_superset_service_user.sql
 │       └── load_subscriber_activity_daily.sql
 ├── tests/
 ├── .env.example
@@ -206,6 +220,8 @@ Some directories contain placeholders for later milestones.
 - A network access rule that allows the development client to reach Atlas.
 - A Snowflake account when reproducing the analytical warehouse milestone.
 - An AWS IAM role and trust policy for the Snowflake storage integration.
+- Docker Desktop with Linux containers for the local Superset environment.
+- OpenSSL 3, available through the custom Superset image, for key generation.
 
 ---
 
@@ -450,6 +466,69 @@ curated schema, stage, file format, or storage integration.
 
 ---
 
+## Running Apache Superset locally
+
+Superset uses an isolated Docker configuration under `docker/superset/`.
+Create its local configuration and provide strong, unique values for the
+PostgreSQL password, Superset secret key, Snowflake account identifier, and
+private-key passphrase:
+
+```powershell
+Copy-Item docker\superset\.env.example docker\superset\.env
+```
+
+Generate an encrypted RSA key pair under the ignored
+`docker/superset/secrets/` directory. Register only the public key through
+`sql/snowflake/06_superset_service_user.sql`. Never commit either key, the
+private-key passphrase, or a populated `.env` file.
+
+On a new metadata volume, initialize the database and create the first local
+administrator interactively:
+
+```powershell
+docker compose `
+  --env-file docker\superset\.env `
+  --file docker\superset\compose.yaml `
+  run --rm superset superset db upgrade
+
+docker compose `
+  --env-file docker\superset\.env `
+  --file docker\superset\compose.yaml `
+  run --rm superset superset fab create-admin
+
+docker compose `
+  --env-file docker\superset\.env `
+  --file docker\superset\compose.yaml `
+  run --rm superset superset init
+```
+
+Store the administrator password in a password manager. Do not add it to
+`.env`, Compose, shell history, or the repository. Existing metadata volumes do
+not require the administrator to be recreated.
+
+Build and start the local services:
+
+```powershell
+docker compose `
+  --env-file docker\superset\.env `
+  --file docker\superset\compose.yaml `
+  up --detach --build --wait
+```
+
+Open Superset at:
+
+```text
+http://localhost:8088
+```
+
+The local deployment contains only Superset and PostgreSQL. Redis, Celery,
+alerts, reports, and public hosting remain outside the current scope. The
+Snowflake connection uses `SUPERSET_SERVICE_USER`, key-pair authentication,
+and `SUBSCRIBER_ANALYTICS_READER`; it must not use `ACCOUNTADMIN` or the loader
+role.
+
+---
+
 ## Configuration
 
 General application configuration is centralized in:
@@ -508,13 +587,17 @@ Existing Git tags are immutable and are never reused.
 - Snowflake reads S3 through role assumption rather than embedded AWS keys.
 - Snowflake loading and analytical access use separate least-privilege roles.
 - Real AWS account identifiers, role ARNs, and Snowflake external IDs are not committed.
+- Superset private keys and local container secrets are excluded from Git.
+- The Snowflake Superset identity has no password and authenticates with an encrypted RSA key.
+- PostgreSQL receives no Snowflake private-key passphrase.
+- The private key is mounted read-only into the Superset container.
 
 ---
 
 ## Project status
 
-Release `v0.3.0` adds the MongoDB Atlas operational serving layer and a typed
-FastAPI contract to the reliable batch foundation:
+Release `v0.4.0` adds the Snowflake analytical warehouse foundation to the
+operational serving capabilities released in `v0.3.0`.
 
 ```text
 Raw JSONL
@@ -550,9 +633,13 @@ outputs: 6,300 events, 130,147,195,502 total bytes, 55.34 ms weighted average
 latency, and 0.9031% weighted average packet loss. A read-only analytical view
 supports daily, geographic, technology, and plan-level queries.
 
-The visualization product is intentionally not fixed yet. The next milestone
-will evaluate public embedding, cost, professional relevance, and operation
-under `analytics.joviac.cloud` without changing the Snowflake contract.
+Apache Superset is now selected and validated locally as the analytical
+visualization layer. Superset 6.0.0 runs with PostgreSQL 17.10 metadata storage,
+connects to Snowflake through a dedicated key-pair-authenticated service user,
+and can query only the approved analytical view. Five semantic metrics and the
+`Daily Subscriber KPI Validation` chart reconcile all four daily windows. The
+first dashboard, public hosting, and delivery under `analytics.joviac.cloud`
+remain pending; therefore `v0.5.0` is in progress and is not yet tagged.
 
 See [Roadmap](docs/ROADMAP.md) for the delivery sequence.
 

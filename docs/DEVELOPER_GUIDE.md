@@ -1,7 +1,7 @@
 # DEVELOPER_GUIDE.md
 
 # Subscriber Analytics Platform
-**Developer Guide (Analytical Warehouse Edition)**
+**Developer Guide (Superset Visualization Edition)**
 
 > **Purpose:** This document is the authoritative engineering reference for continuing the development of the Subscriber Analytics Platform. It captures the project's current state, architectural decisions, engineering conventions, and development roadmap. Read this document before implementing new features or continuing development.
 
@@ -9,12 +9,13 @@
 
 | Item | Value |
 |------|-------|
-| Current Version | v0.3.0 |
-| Current Git Tag | v0.3.0 |
+| Current Version | v0.4.0 |
+| Current Git Tag | v0.4.0 |
 | Primary Branch | main |
-| Completed Milestone | Snowflake analytical warehouse foundation implemented and validated after `v0.3.0` |
+| Completed Milestone | Snowflake analytical warehouse foundation released as `v0.4.0` |
+| Current Development | Local Apache Superset foundation, Snowflake service identity, semantic metrics, and validation chart |
 | Stable Pipeline | Raw JSONL → Enriched Parquet → Curated Hourly → Curated Daily → Current Subscriber Profiles → MongoDB Atlas → FastAPI |
-| Next Deliverable | Public analytical visualization selection and proof of delivery |
+| Next Deliverable | First analytical dashboard design and validation |
 | Serving Path | MongoDB Atlas with FastAPI liveness, readiness, subscriber lookup, and bounded listing implemented |
 | Analytical Path | Curated Parquet → Amazon S3 → Snowflake native table → analytical view implemented |
 | Primary Language | Python |
@@ -28,7 +29,7 @@
 
 The Subscriber Analytics Platform is a portfolio project that simulates a production-grade telecommunications analytics platform. The objective is to demonstrate sound engineering and architectural practices rather than simply producing code.
 
-Current version: **v0.3.0**
+Current version: **v0.4.0**
 
 ---
 
@@ -99,6 +100,17 @@ Current version: **v0.3.0**
 - Exact local-Parquet-to-Snowflake reconciliation across 8 rows and 6,300 events
 - Validated daily, geographic, technology, and plan-level SQL examples
 - Versioned Snowflake setup, load, access-control, and validation scripts
+- Apache Superset 6.0.0 custom lean image
+- PostgreSQL 17.10 metadata service with persistent storage
+- Local Docker Compose topology with health checks
+- Pinned `psycopg2-binary` and `snowflake-sqlalchemy` drivers
+- Passwordless Snowflake `SUPERSET_SERVICE_USER`
+- Encrypted RSA key-pair authentication
+- Read-only private-key mount and per-service environment isolation
+- Positive analytical-view and negative curated-object RBAC validation
+- Superset dataset over `ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY`
+- Five reusable semantic metrics with weighted quality formulas
+- `Daily Subscriber KPI Validation` chart reconciled across four days
 
 ## Completed milestone
 
@@ -106,8 +118,9 @@ Current version: **v0.3.0**
 
 ## Planned milestones
 
-1. Select and publish the analytical visualization layer
-2. Containerization and deployment automation
+1. Design and validate the first analytical dashboard
+2. Define the public presentation and hosting model
+3. Containerization and deployment automation beyond the local Superset stack
 3. Formal data quality and governance
 
 ---
@@ -123,6 +136,7 @@ Current version: **v0.3.0**
 | storage | Persistence |
 | scripts | Pipeline orchestration |
 | sql/snowflake | Reproducible Snowflake setup, loading, RBAC, and validation |
+| docker/superset | Local Superset image, PostgreSQL metadata service, configuration, and health checks |
 | tests | Automated tests |
 | docs | Documentation |
 
@@ -144,10 +158,10 @@ Curated Daily ───────────────→ Amazon S3
 Current Subscriber Profiles     Snowflake
     ↓                              ↓
 MongoDB Atlas               Analytical Views
-    ↓
-FastAPI
+    ↓                              ↓
+FastAPI                    Apache Superset
     ↓ planned                    ↓ planned
-Consumer Applications      Visualization Layer
+Consumer Applications      Public Dashboard
 ```
 
 Design principles:
@@ -182,8 +196,7 @@ Design principles:
 
 - FastAPI is the controlled interface for operational subscriber access.
 - MongoDB is the serving database.
-- The selected analytical visualization product will query approved Snowflake
-  views, not MongoDB or FastAPI.
+- Apache Superset queries approved Snowflake views, not MongoDB or FastAPI.
 - Snowflake will serve historical and aggregated analytics without replacing
   canonical Parquet datasets in S3.
 - UTC everywhere.
@@ -240,7 +253,8 @@ Semantic Versioning:
 | ✅ | MongoDB Atlas profile synchronization |
 | ✅ | FastAPI — liveness, readiness, lookup, and bounded listing implemented |
 | ✅ | Snowflake analytical warehouse foundation |
-| ⏳ | Public analytical visualization layer |
+| 🚧 | Apache Superset analytical visualization layer |
+| ⏳ | First analytical dashboard and public delivery |
 | ⏳ | Containerization and deployment automation |
 
 ---
@@ -421,9 +435,52 @@ Local Parquet and Snowflake results match exactly. Unchanged reruns process
 zero files. Automation remains deferred; no Snowpipe, task, dynamic table, or
 scheduled trigger is implemented.
 
-The visualization product is not yet selected. Power BI, Tableau, and Apache
-Superset remain candidates for a separately evaluated public dashboard under
-`analytics.joviac.cloud`.
+Apache Superset is selected and validated locally. Public deployment remains a
+separate decision under `analytics.joviac.cloud`.
+
+## 9.4 Apache Superset analytical visualization
+
+Implemented local topology:
+
+```text
+Browser → Apache Superset 6.0.0
+              ├── PostgreSQL 17.10 metadata
+              └── Snowflake ANALYTICS view
+```
+
+The custom image derives from `apache/superset:6.0.0` and installs only:
+
+- `psycopg2-binary==2.9.12`;
+- `snowflake-sqlalchemy==1.11.0`.
+
+Docker Compose persists PostgreSQL metadata in a named volume, keeps its port
+private, binds Superset only to `127.0.0.1:8088`, and validates both services
+with health checks. Redis, Celery, alerts, and reports are intentionally absent.
+On a new metadata volume, run `superset db upgrade`, create the local
+administrator interactively with `superset fab create-admin`, and run
+`superset init`. The administrator password belongs in a password manager, not
+in `.env` or the repository.
+
+Snowflake access uses `SUPERSET_SERVICE_USER`, `TYPE = SERVICE`, and encrypted
+RSA key-pair authentication. The private key remains under the ignored
+`docker/superset/secrets/` directory and is mounted read-only. The identity has
+only `SUBSCRIBER_ANALYTICS_READER`. Tests with secondary roles disabled proved
+that it can query the approved analytical view and cannot access the curated
+table or external stage.
+
+The registered Superset dataset is
+`ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY`. Implemented metric keys are:
+
+- `active_subscribers`;
+- `total_events`;
+- `total_traffic_gib`;
+- `weighted_avg_latency_ms`;
+- `weighted_avg_packet_loss_pct`.
+
+The quality metrics recompute averages from sums and sample counts. The saved
+`Daily Subscriber KPI Validation` table groups by activity date and reconciles
+the four implemented daily windows. The first dashboard, exports, public access,
+and production hosting remain deferred to the next increment.
 
 ---
 

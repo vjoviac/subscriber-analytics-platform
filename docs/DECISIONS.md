@@ -866,7 +866,7 @@ Disable secondary roles when validating either role. Use a dedicated
 
 ## ADR-033 — Defer visualization-product selection
 
-**Status:** Accepted
+**Status:** Superseded by ADR-034
 
 ### Context
 
@@ -909,6 +909,104 @@ CloudFront, and private-S3 website pattern where appropriate.
 - no dashboard product is presented as implemented in the Snowflake release;
 - visualization-specific credentials, roles, hosting, and automation are
   deferred.
+
+---
+
+## ADR-034 — Use Apache Superset as the analytical visualization layer
+
+**Status:** Accepted
+
+### Context
+
+The visualization decision evaluated Power BI, Tableau Public, Grafana, and
+Apache Superset. Power BI Service could not be used with the available personal
+account, Tableau Public would publish dashboards and underlying data, and the
+direct Snowflake connector for Grafana requires Grafana Cloud or Enterprise.
+Grafana also remains better aligned with the platform's future observability
+scope. Superset provides Snowflake connectivity, local container learning, and
+control over future hosting under `analytics.joviac.cloud`.
+
+### Decision
+
+Use Apache Superset 6.0.0 as the analytical visualization layer. Extend the
+official lean image with only `psycopg2-binary` and `snowflake-sqlalchemy`. Run
+Superset with PostgreSQL 17.10 as its metadata store through Docker Compose.
+
+Keep the initial topology intentionally small:
+
+```text
+Browser
+  → Apache Superset
+      → PostgreSQL metadata
+      → approved Snowflake analytical view
+```
+
+Do not add Redis, Celery, alerts, or reports until a requirement justifies
+them. Local Superset binds only to `127.0.0.1:8088`; public deployment is a
+separate increment.
+
+### Rationale
+
+- preserves direct use of the governed Snowflake analytical contract;
+- demonstrates containerization and BI administration without changing data
+  products;
+- supports reusable metrics and interactive dashboards;
+- avoids public-data requirements during development;
+- retains control over future custom-domain deployment;
+- minimizes operational components in the first increment.
+
+### Consequences
+
+- PostgreSQL metadata must be persisted, backed up, and migrated with Superset;
+- a custom image is required because the lean image omits database drivers;
+- Superset configuration and local secrets must remain separate from the Python
+  pipeline environment;
+- dashboard exports and public-hosting controls remain future work;
+- `v0.5.0` remains incomplete until the first analytical dashboard and its
+  delivery scope are validated.
+
+---
+
+## ADR-035 — Authenticate Superset to Snowflake with a service user and RSA key pair
+
+**Status:** Accepted
+
+### Context
+
+Superset is a non-human analytical client. Snowflake is deprecating single-factor
+password authentication for service identities, and the visualization layer
+must not use `ACCOUNTADMIN`, the loader role, or a human login. The existing
+reader role already defines the approved analytical boundary.
+
+### Decision
+
+Create `SUPERSET_SERVICE_USER` with `TYPE = SERVICE`, no password, and an RSA
+public key supplied through a Snowflake session variable. Assign only
+`SUBSCRIBER_ANALYTICS_READER` and set deterministic reader, warehouse, database,
+and schema defaults.
+
+Store the encrypted private key only under the ignored local Superset secrets
+directory. Mount it read-only into the Superset container and keep its
+passphrase outside Git. Disable secondary roles during validation and prove
+both allowed view access and denied curated-table and stage access.
+
+### Rationale
+
+- uses strong authentication suitable for a non-human identity;
+- separates visualization from human and administrative credentials;
+- reuses the established view-only RBAC boundary;
+- keeps private-key material out of the image and repository;
+- makes positive and negative authorization tests explicit.
+
+### Consequences
+
+- operators must protect the private-key passphrase and rotate key pairs;
+- deployed environments require managed secret and key storage;
+- PostgreSQL must not receive Snowflake key material through shared environment
+  configuration;
+- Superset connection metadata is encrypted using `SUPERSET_SECRET_KEY`;
+- losing both the encrypted private key and its passphrase requires registering
+  a new key before the service can reconnect.
 
 ---
 

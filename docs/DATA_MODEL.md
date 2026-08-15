@@ -421,6 +421,38 @@ queries can calculate weighted averages instead of averaging stored averages.
 The read-only role can query this view but cannot access the curated table,
 external stage, file format, or storage integration.
 
+### Apache Superset semantic dataset
+
+The local Superset dataset maps directly to:
+
+```text
+Snowflake Subscriber Analytics
+└── ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY
+```
+
+It does not copy or transform warehouse rows. Superset stores dataset metadata,
+saved metrics, charts, and future dashboards in PostgreSQL while Snowflake
+remains the analytical execution engine.
+
+Implemented reusable metrics:
+
+| Metric key | Label | SQL expression |
+|---|---|---|
+| `active_subscribers` | Active Subscribers | `COUNT(DISTINCT SUBSCRIBER_ID)` |
+| `total_events` | Total Events | `SUM(EVENT_COUNT)` |
+| `total_traffic_gib` | Total Traffic (GiB) | `SUM(TOTAL_BYTES) / POWER(1024, 3)` |
+| `weighted_avg_latency_ms` | Weighted Avg Latency (ms) | `SUM(LATENCY_SUM) / NULLIF(SUM(LATENCY_SAMPLE_COUNT), 0)` |
+| `weighted_avg_packet_loss_pct` | Weighted Avg Packet Loss (%) | `SUM(PACKET_LOSS_SUM) / NULLIF(SUM(PACKET_LOSS_SAMPLE_COUNT), 0)` |
+
+The quality metrics intentionally do not average `avg_latency_ms` or
+`avg_packet_loss_pct`. They recompute weighted values from additive components
+at the active filter and grouping grain.
+
+The first saved chart, `Daily Subscriber KPI Validation`, groups by
+`ACTIVITY_DATE`, uses `MAX(ACTIVITY_DATE)` only as the aggregate-mode sort
+expression, and orders dates ascending. It reconciles the four implemented
+daily windows before dashboard design begins.
+
 ---
 
 ## 8. Current subscriber profile
@@ -669,9 +701,9 @@ returns an empty `items` list rather than `404 Not Found`.
 ---
 
 Analytical datasets are consumed separately through Snowflake. The public
-visualization product remains to be selected and must query approved analytical
-views rather than MongoDB or FastAPI. Broad historical aggregations are not
-added to FastAPI without a defined operational requirement.
+visualization layer is Apache Superset and must query approved analytical views
+rather than MongoDB or FastAPI. Broad historical aggregations are not added to
+FastAPI without a defined operational requirement.
 
 ## 11. Schema evolution
 
@@ -749,6 +781,16 @@ profile_version
 - the analytical `activity_date + subscriber_id` grain is unique;
 - global weighted averages equal the canonical Parquet calculations;
 - unchanged files are skipped when `FORCE = FALSE`.
+
+### Superset semantic dataset
+
+- source database is the key-pair-authenticated Snowflake connection;
+- source schema is `ANALYTICS`;
+- source object is `SUBSCRIBER_ACTIVITY_DAILY`;
+- active-subscriber and total metrics match the approved view;
+- traffic converts bytes to GiB only in the explicitly named metric;
+- latency and packet-loss metrics use sums and sample counts;
+- the visualization identity cannot query the curated table or stage.
 
 ### Current profiles
 

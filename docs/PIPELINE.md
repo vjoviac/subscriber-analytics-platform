@@ -55,7 +55,9 @@ Load into Snowflake native table — implemented
           ↓
 Query approved analytical view — implemented
           ↓
-Public visualization layer — planned
+Explore through Apache Superset — implemented locally
+          ↓
+Public dashboard under analytics.joviac.cloud — planned
 ```
 
 ---
@@ -556,6 +558,69 @@ validation, lineage null counts, and duplicate counts are all zero.
 
 ---
 
+## 13.2 Stage 11 — Apache Superset analytical visualization
+
+### Purpose
+
+Apache Superset provides local visual exploration of the approved Snowflake
+analytical view. It does not copy or transform analytical data. Superset stores
+only its own application metadata in PostgreSQL and sends analytical queries to
+Snowflake.
+
+### Local topology
+
+Docker Compose runs:
+
+- a custom Apache Superset 6.0.0 image derived from the official lean image;
+- PostgreSQL 17.10 as the persistent Superset metadata database.
+
+The custom image adds `psycopg2-binary==2.9.12` and
+`snowflake-sqlalchemy==1.11.0`. Redis, Celery, alerts, and reports are not part
+of the initial topology. PostgreSQL is not published to the host, and Superset
+is bound to `127.0.0.1:8088` for local access only.
+
+### Snowflake identity and access
+
+Superset authenticates as `SUPERSET_SERVICE_USER`, a passwordless Snowflake
+service user configured with an RSA public key. Its encrypted private key is
+ignored by Git and mounted read-only into the container. The user receives
+`SUBSCRIBER_ANALYTICS_READER` directly and cannot use the loader role.
+
+Provisioning is versioned in:
+
+```text
+sql/snowflake/06_superset_service_user.sql
+```
+
+Validation explicitly disables secondary roles. The identity can query
+`ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY` but cannot query the `CURATED` native
+table or inspect the external stage.
+
+### Semantic dataset
+
+The Superset dataset maps directly to:
+
+```text
+ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY
+```
+
+Its initial metrics are:
+
+| Metric key | SQL expression |
+|---|---|
+| `active_subscribers` | `COUNT(DISTINCT SUBSCRIBER_ID)` |
+| `total_events` | `SUM(EVENT_COUNT)` |
+| `total_traffic_gib` | `SUM(TOTAL_BYTES) / POWER(1024, 3)` |
+| `weighted_avg_latency_ms` | `SUM(LATENCY_SUM) / NULLIF(SUM(LATENCY_SAMPLE_COUNT), 0)` |
+| `weighted_avg_packet_loss_pct` | `SUM(PACKET_LOSS_SUM) / NULLIF(SUM(PACKET_LOSS_SAMPLE_COUNT), 0)` |
+
+The saved `Daily Subscriber KPI Validation` chart groups by `ACTIVITY_DATE`
+and sorts ascending through `MAX(ACTIVITY_DATE)`. Its four daily rows reconcile
+with Snowflake. Building the first dashboard and publishing it under
+`analytics.joviac.cloud` are deferred to the next increment.
+
+---
+
 ## 14. Execution modes
 
 ### SAFE
@@ -748,6 +813,28 @@ The Snowflake milestone adds versioned SQL rather than Python runtime code, so
 the automated suite remains at 117 passing tests. Manual integration validation
 confirmed isolated loader and reader roles, idempotent reruns, complete lineage,
 and exact reconciliation with local Parquet.
+
+### Apache Superset integration validation
+
+The local analytical visualization path is validated manually because it spans
+container startup, PostgreSQL metadata, Snowflake authentication, and Superset
+configuration rather than Python pipeline code.
+
+Validated behavior includes:
+
+- a custom Apache Superset 6.0.0 image with PostgreSQL and Snowflake drivers;
+- persistent PostgreSQL metadata storage and healthy Compose services;
+- Superset metadata migrations and role initialization;
+- encrypted RSA key-pair authentication for `SUPERSET_SERVICE_USER`;
+- reader-role isolation with secondary roles disabled;
+- positive access to `ANALYTICS.SUBSCRIBER_ACTIVITY_DAILY`;
+- denied access to the `CURATED` table and external stage;
+- a saved Snowflake connection and semantic dataset;
+- five reconciled semantic metrics;
+- a saved four-day validation chart.
+
+The automated suite remains at 117 passing tests because this increment does
+not change Python application or pipeline behavior.
 
 ---
 
